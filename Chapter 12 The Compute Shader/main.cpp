@@ -89,9 +89,9 @@ public:
 
 	struct WaterDisturbCB
 	{
-		XMUINT2 gTexCoord;
-		float gMagnitude;
-		float gHalfMagnitude;
+		XMUINT2 mTexCoord;
+		float mMagnitude;
+		float mHalfMagnitude;
 	};
 
 	ID3D11ComputeShader* mWaterUpdateCS;
@@ -336,10 +336,7 @@ bool TestApp::Init()
 			desc.MiscFlags = 0;
 			desc.StructureByteStride = 0;
 
-			HR(mDevice->CreateBuffer(&desc, nullptr, &mCbPerFrame));
-
-			//mContext->GSSetConstantBuffers(1, 1, &mCbPerFrame);
-			mContext->PSSetConstantBuffers(1, 1, &mCbPerFrame);
+			HR(mDevice->CreateBuffer(&desc, nullptr, &mWaterDisturbCB));
 		} // CB water disturb
 
 		// CS water update
@@ -1149,7 +1146,17 @@ void TestApp::UpdateScene(float dt)
 
 			mContext->CSSetShader(mWaterDisturbCS, nullptr, 0);
 
-			// bind
+			// bind CB
+			mContext->CSSetConstantBuffers(0, 1, &mWaterDisturbCB);
+
+			// upload CB
+			WaterDisturbCB buffer;
+			buffer.mTexCoord = XMUINT2(i, j);
+			buffer.mMagnitude = r;
+			buffer.mHalfMagnitude = r / 2;
+			mContext->UpdateSubresource(mWaterDisturbCB, 0, nullptr, &buffer, 0, 0);
+
+			// bind SRV and UAV
 			mContext->CSSetShaderResources(0, 1, &mCurrTextureSRV);
 			mContext->CSSetUnorderedAccessViews(0, 1, &mNextTextureUAV, nullptr);
 
@@ -1163,11 +1170,19 @@ void TestApp::UpdateScene(float dt)
 			ID3D11ShaderResourceView* const NullSRV = nullptr;
 			ID3D11UnorderedAccessView* const NullUAV = nullptr;
 
-			// unbind
+			// unbind SRV and UAV
 			mContext->CSSetShaderResources(0, 1, &NullSRV);
 			mContext->CSSetUnorderedAccessViews(0, 1, &NullUAV, nullptr);
-		}
 
+			ID3D11Resource* pDstResource = nullptr; mCurrTextureSRV->GetResource(&pDstResource);
+			ID3D11Resource* pSrcResource = nullptr; mNextTextureUAV->GetResource(&pSrcResource);
+
+			mContext->Flush();
+			mContext->CopyResource(pDstResource, pSrcResource);
+
+			SafeRelease(pDstResource);
+			SafeRelease(pSrcResource);
+		}
 	}
 
 	mWavesGenerator.Update(dt);
