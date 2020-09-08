@@ -106,7 +106,7 @@ D3DApp::D3DApp() :
 
 	mTheta(1.24f * XM_PI),
 	mPhi(0.42f * XM_PI),
-	mRadius(10),
+	mRadius(50),
 	mLastMousePos(0, 0)
 {
 	ZeroMemory(&mViewport, sizeof(D3D11_VIEWPORT));

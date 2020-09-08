@@ -28,13 +28,11 @@ public:
 
 	XMVECTOR mEyePosition;
 
-	struct PerObjectCB
+	struct FixedCB
 	{
-		XMFLOAT4X4 mWorld;
-		XMFLOAT4X4 mWorldInverseTranspose;
-		XMFLOAT4X4 mWorldViewProj;
-		GameObject::Material mMaterial;
-		XMFLOAT4X4 mTexTransform;
+		XMFLOAT2 mTexelSize;
+		float    mSpaceStep;
+		float    pad;
 	};
 
 	struct PerFrameCB
@@ -50,8 +48,18 @@ public:
 		XMFLOAT4 mFogColor;
 	};
 
-	ID3D11Buffer* mCbPerObject;
-	ID3D11Buffer* mCbPerFrame;
+	struct PerObjectCB
+	{
+		XMFLOAT4X4 mWorld;
+		XMFLOAT4X4 mWorldInverseTranspose;
+		XMFLOAT4X4 mWorldViewProj;
+		GameObject::Material mMaterial;
+		XMFLOAT4X4 mTexTransform;
+	};
+
+	ID3D11Buffer* mPerObjectCB;
+	ID3D11Buffer* mPerFrameCB;
+	ID3D11Buffer* mFixedCB;
 
 	GameObject mLand;
 	GameObject mWaves;
@@ -95,26 +103,40 @@ public:
 	};
 
 	ID3D11ComputeShader* mWaterUpdateCS;
+	ID3D11Buffer* mWaterUpdateCB;
+
+	struct WaterUpdateCB
+	{
+		float mK1;
+		float mK2;
+		float mK3;
+		float pad;
+	};
 	ID3D11ShaderResourceView* mPrevTextureSRV;
 	ID3D11ShaderResourceView* mCurrTextureSRV;
+	//ID3D11ShaderResourceView* mNextTextureSRV;
+	//ID3D11UnorderedAccessView* mPrevTextureUAV;
 	ID3D11UnorderedAccessView* mCurrTextureUAV;
 	ID3D11UnorderedAccessView* mNextTextureUAV;
 };
 
 TestApp::TestApp() : D3DApp(),
-	mCbPerObject(nullptr),
-	mCbPerFrame(nullptr),
+	mPerObjectCB(nullptr),
+	mPerFrameCB(nullptr),
+	mFixedCB(nullptr),
 	mSamplerState(nullptr),
 	mScreenQuadUAV(nullptr),
 	mScreenQuadRTV(nullptr),
 
 	mWaterDisturbCS(nullptr),
 	mWaterDisturbCB(nullptr),
-
 	mWaterUpdateCS(nullptr),
+	mWaterUpdateCB(nullptr),
 
 	mPrevTextureSRV(nullptr),
 	mCurrTextureSRV(nullptr),
+	//mNextTextureSRV(nullptr),
+	//mPrevTextureUAV(nullptr),
 	mCurrTextureUAV(nullptr),
 	mNextTextureUAV(nullptr)
 {
@@ -161,8 +183,9 @@ TestApp::TestApp() : D3DApp(),
 TestApp::~TestApp()
 {
 	//SafeRelease(mInputLayout);
-	SafeRelease(mCbPerObject);
-	SafeRelease(mCbPerFrame);
+	SafeRelease(mPerObjectCB);
+	SafeRelease(mPerFrameCB);
+	SafeRelease(mFixedCB);
 	SafeRelease(mSamplerState);
 	SafeRelease((*mCullClockwiseRS.GetAddressOf()));
 	SafeRelease((*mNoCullRS.GetAddressOf()));
@@ -183,8 +206,11 @@ TestApp::~TestApp()
 	SafeRelease(mWaterDisturbCS);
 	SafeRelease(mWaterDisturbCB);
 	SafeRelease(mWaterUpdateCS);
+	SafeRelease(mWaterUpdateCB);
 	SafeRelease(mPrevTextureSRV);
 	SafeRelease(mCurrTextureSRV);
+	//SafeRelease(mNextTextureSRV);
+	//SafeRelease(mPrevTextureUAV);
 	SafeRelease(mCurrTextureUAV);
 	SafeRelease(mNextTextureUAV);
 }
@@ -206,7 +232,7 @@ bool TestApp::Init()
 			HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
 			mLand.mVertexShader = shader;
-			mWaves.mVertexShader = shader;
+			//mWaves.mVertexShader = shader;
 
 			// input layout land and waves
 			{
@@ -222,7 +248,7 @@ bool TestApp::Init()
 				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
 
 				mLand.mInputLayout = layout;
-				mWaves.mInputLayout = layout;
+				//mWaves.mInputLayout = layout;
 			} // input layout
 		} // vertex shader
 
@@ -315,6 +341,35 @@ bool TestApp::Init()
 			mScreenQuad.mPixelShader = shader;
 		} // pixel shader
 
+		// waves VS
+		{
+			Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
+
+			std::wstring path = base + L"WaterVS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+
+			mWaves.mVertexShader = shader;
+
+			// waves IL
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 40, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				};
+
+				Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
+
+				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
+
+				mWaves.mInputLayout = layout;
+			} // waves IL
+		} // waves VS
+
 		// CS water disturb
 		{
 			std::wstring path = base + L"WaterDisturbCS.hlsl";
@@ -347,6 +402,21 @@ bool TestApp::Init()
 			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
 			HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mWaterUpdateCS));
 		} // CS water update
+
+		// CB water update
+		{
+			static_assert((sizeof(WaterUpdateCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(WaterUpdateCB);
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			HR(mDevice->CreateBuffer(&desc, nullptr, &mWaterUpdateCB));
+		} // CB water update
 
 		//// pixel shader no texture
 		//{
@@ -737,6 +807,7 @@ bool TestApp::Init()
 					HR(mDevice->CreateTexture2D(&desc, 0, &texture));
 
 					HR(mDevice->CreateShaderResourceView(texture, nullptr, &mPrevTextureSRV));
+					//HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mPrevTextureUAV));
 
 					SafeRelease(texture);
 				}
@@ -755,6 +826,7 @@ bool TestApp::Init()
 					ID3D11Texture2D* texture = nullptr;
 					HR(mDevice->CreateTexture2D(&desc, 0, &texture));
 
+					//HR(mDevice->CreateShaderResourceView(texture, nullptr, &mNextTextureSRV));
 					HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mNextTextureUAV));
 
 					SafeRelease(texture);
@@ -915,11 +987,11 @@ bool TestApp::Init()
 			desc.MiscFlags = 0;
 			desc.StructureByteStride = 0;
 
-			HR(mDevice->CreateBuffer(&desc, nullptr, &mCbPerObject));
+			HR(mDevice->CreateBuffer(&desc, nullptr, &mPerObjectCB));
 
-			mContext->VSSetConstantBuffers(0, 1, &mCbPerObject);
+			mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
 			//mContext->GSSetConstantBuffers(0, 1, &mCbPerObject);
-			mContext->PSSetConstantBuffers(0, 1, &mCbPerObject);
+			mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
 		} // constant buffer per object
 
 		// constant buffer per frame
@@ -934,11 +1006,37 @@ bool TestApp::Init()
 			desc.MiscFlags = 0;
 			desc.StructureByteStride = 0;
 
-			HR(mDevice->CreateBuffer(&desc, nullptr, &mCbPerFrame));
+			HR(mDevice->CreateBuffer(&desc, nullptr, &mPerFrameCB));
 
 			//mContext->GSSetConstantBuffers(1, 1, &mCbPerFrame);
-			mContext->PSSetConstantBuffers(1, 1, &mCbPerFrame);
+			mContext->PSSetConstantBuffers(1, 1, &mPerFrameCB);
 		} // constant buffer per frame
+
+		// fixed CB
+		{
+			static_assert((sizeof(FixedCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(FixedCB);
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			HR(mDevice->CreateBuffer(&desc, nullptr, &mFixedCB));
+
+			mContext->VSSetConstantBuffers(2, 1, &mFixedCB);
+		} // fixed CB
+
+		// upload fixed CB
+		{
+			FixedCB buffer;
+			buffer.mTexelSize.x = 1.0f / (mWavesGenerator.mCols - 1);
+			buffer.mTexelSize.y = 1.0f / (mWavesGenerator.mRows - 1);
+			buffer.mSpaceStep = mWavesGenerator.mSpaceStep;
+			mContext->UpdateSubresource(mFixedCB, 0, nullptr, &buffer, 0, 0);
+		} // upload fixed CB
 
 		// shader resource view
 		{
@@ -1065,6 +1163,7 @@ bool TestApp::Init()
 
 			HR(mDevice->CreateSamplerState(&desc, &mSamplerState));
 
+			mContext->VSSetSamplers(0, 1, &mSamplerState);
 			mContext->PSSetSamplers(0, 1, &mSamplerState);
 		} // sampler state
 
@@ -1125,6 +1224,21 @@ void TestApp::UpdateScene(float dt)
 
 	mView = XMMatrixLookAtLH(mEyePosition, FocusPosition, UpDirection);
 
+	static auto CopyTexture = [this](ID3D11View* pDstView, ID3D11View* pSrcView) -> void
+	{
+		ID3D11Resource* pDstResource = nullptr;
+		ID3D11Resource* pSrcResource = nullptr;
+
+		pDstView->GetResource(&pDstResource);
+		pSrcView->GetResource(&pSrcResource);
+
+		mContext->CopyResource(pDstResource, pSrcResource);
+		mContext->Flush();
+
+		SafeRelease(pDstResource);
+		SafeRelease(pSrcResource);
+	};
+
 	static float BaseTime = 0;
 
 	if ((mTimer.TotalTime() - BaseTime) >= 0.25f)
@@ -1174,14 +1288,18 @@ void TestApp::UpdateScene(float dt)
 			mContext->CSSetShaderResources(0, 1, &NullSRV);
 			mContext->CSSetUnorderedAccessViews(0, 1, &NullUAV, nullptr);
 
-			ID3D11Resource* pDstResource = nullptr; mCurrTextureSRV->GetResource(&pDstResource);
-			ID3D11Resource* pSrcResource = nullptr; mNextTextureUAV->GetResource(&pSrcResource);
+			// copy next to curr
+			//{
+			//	ID3D11Resource* pDstResource = nullptr; mCurrTextureSRV->GetResource(&pDstResource);
+			//	ID3D11Resource* pSrcResource = nullptr; mNextTextureUAV->GetResource(&pSrcResource);
 
-			mContext->Flush();
-			mContext->CopyResource(pDstResource, pSrcResource);
+			//	mContext->CopyResource(pDstResource, pSrcResource);
+			//	mContext->Flush();
 
-			SafeRelease(pDstResource);
-			SafeRelease(pSrcResource);
+			//	SafeRelease(pDstResource);
+			//	SafeRelease(pSrcResource);
+			//}
+			CopyTexture(mCurrTextureSRV, mNextTextureUAV);
 		}
 	}
 
@@ -1209,13 +1327,26 @@ void TestApp::UpdateScene(float dt)
 		//   output : curr
 		//            next
 
+		// bind shader
 		mContext->CSSetShader(mWaterUpdateCS, nullptr, 0);
 
-		// bind
+		// bind CB
+		mContext->CSSetConstantBuffers(0, 1, &mWaterUpdateCB);
+
+		// upload CB
+		WaterUpdateCB buffer;
+		buffer.mK1 = mWavesGenerator.mK1;
+		buffer.mK2 = mWavesGenerator.mK2;
+		buffer.mK3 = mWavesGenerator.mK3;
+		mContext->UpdateSubresource(mWaterUpdateCB, 0, nullptr, &buffer, 0, 0);
+
+		// bind SRV and UAV
 		mContext->CSSetShaderResources(0, 1, &mPrevTextureSRV);
 		mContext->CSSetShaderResources(1, 1, &mCurrTextureSRV);
-		mContext->CSSetUnorderedAccessViews(0, 1, &mCurrTextureUAV, nullptr);
-		mContext->CSSetUnorderedAccessViews(1, 1, &mNextTextureUAV, nullptr);
+		//mContext->CSSetUnorderedAccessViews(0, 1, &mCurrTextureUAV, nullptr);
+		//mContext->CSSetUnorderedAccessViews(1, 1, &mNextTextureUAV, nullptr);
+		//mContext->CSSetShaderResources(0, 1, &mCurrTextureSRV);
+		mContext->CSSetUnorderedAccessViews(0, 1, &mNextTextureUAV, nullptr);
 
 		//UINT GroupsX = std::ceil(mWavesGenerator.mCols / 64.0f);
 		//UINT GroupsY = std::ceil(mWavesGenerator.mRows / 64.0f);
@@ -1230,6 +1361,32 @@ void TestApp::UpdateScene(float dt)
 		// unbind
 		mContext->CSSetShaderResources(0, 2, NullSRV);
 		mContext->CSSetUnorderedAccessViews(0, 2, NullUAV, nullptr);
+
+		// copy curr to prev
+		//{
+		//	ID3D11Resource* pDstResource = nullptr; mPrevTextureSRV->GetResource(&pDstResource);
+		//	ID3D11Resource* pSrcResource = nullptr; mCurrTextureSRV->GetResource(&pSrcResource);
+
+		//	mContext->CopyResource(pDstResource, pSrcResource);
+		//	mContext->Flush();
+
+		//	SafeRelease(pDstResource);
+		//	SafeRelease(pSrcResource);
+		//}
+		CopyTexture(mPrevTextureSRV, mCurrTextureSRV);
+
+		// copy next to curr
+		//{
+		//	ID3D11Resource* pDstResource = nullptr; mCurrTextureSRV->GetResource(&pDstResource);
+		//	ID3D11Resource* pSrcResource = nullptr; mNextTextureUAV->GetResource(&pSrcResource);
+
+		//	mContext->CopyResource(pDstResource, pSrcResource);
+		//	mContext->Flush();
+
+		//	SafeRelease(pDstResource);
+		//	SafeRelease(pSrcResource);
+		//}
+		CopyTexture(mCurrTextureSRV, mNextTextureUAV);
 	}
 
 
@@ -1256,7 +1413,8 @@ void TestApp::DrawScene()
 		buffer.mFogStart = 15;
 		buffer.mFogRange = 175;
 		XMStoreFloat4(&buffer.mFogColor, Colors::Silver);
-		mContext->UpdateSubresource(mCbPerFrame, 0, 0, &buffer, 0, 0);
+
+		mContext->UpdateSubresource(mPerFrameCB, 0, 0, &buffer, 0, 0);
 	};
 
 	static auto SetPerObjectCB = [this](GameObject* obj) -> void
@@ -1267,7 +1425,8 @@ void TestApp::DrawScene()
 		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * mView * mProj);
 		buffer.mMaterial = obj->mMaterial;
 		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
-		mContext->UpdateSubresource(mCbPerObject, 0, 0, &buffer, 0, 0);
+
+		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
 	};
 
 	static auto DrawGameObject = [this](GameObject* obj) -> void
@@ -1301,6 +1460,12 @@ void TestApp::DrawScene()
 			mContext->PSSetShaderResources(0, 1, obj->mSRV.GetAddressOf());
 		}
 
+		// dispacement map
+		if (obj == &mWaves)
+		{
+			mContext->VSSetShaderResources(1, 1, &mCurrTextureSRV);
+		}
+
 		// rasterizer, blend and depth-stencil states
 		mContext->RSSetState(obj->mRasterizerState.Get());
 		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
@@ -1319,6 +1484,11 @@ void TestApp::DrawScene()
 		// unbind SRV
 		ID3D11ShaderResourceView* const NullSRV = nullptr;
 		mContext->PSSetShaderResources(0, 1, &NullSRV);
+
+		if (obj == &mWaves)
+		{
+			mContext->PSSetShaderResources(1, 1, &NullSRV);
+		}
 	};
 
 	// render to offscreen texture
@@ -1342,13 +1512,14 @@ void TestApp::DrawScene()
 	//mContext->OMSetRenderTargets(1, &NullRTV, mDepthStencilView);
 
 	//mBlurEffect.Blur(mContext, *mScreenQuad.mSRV.GetAddressOf(), mScreenQuadUAV, 4);
-	mBlurEffect.Blur(mContext, mScreenQuadSRV, mScreenQuadUAV, 4);
+	//mBlurEffect.Blur(mContext, mScreenQuadSRV, mScreenQuadUAV, 4);
 
 	// draw screen quad
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
 	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 
 	mContext->PSSetShaderResources(0, 1, &mScreenQuadSRV);
+	//mContext->PSSetShaderResources(0, 1, &mCurrTextureSRV);
 
 	DrawGameObject(&mScreenQuad);
 

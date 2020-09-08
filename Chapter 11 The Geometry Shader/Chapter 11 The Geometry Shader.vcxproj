@@ -89,7 +89,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\D3PO\Google Drive\libraries\include;C:\Users\D3PO\Google Drive\libraries\DirectXTK-jul2020\Inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\D3PO\Google Drive\libraries\include\GLFW;C:\Users\D3PO\Google Drive\libraries\DirectXTK-jul2020\Inc;C:\Users\D3PO\source\repos\3D Game Programming with DirectX 11\D3DApp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -110,7 +110,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\D3PO\Google Drive\libraries\include;C:\Users\D3PO\Google Drive\libraries\DirectXTK-jul2020\Inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\D3PO\Google Drive\libraries\include\GLFW;C:\Users\D3PO\Google Drive\libraries\DirectXTK-jul2020\Inc;C:\Users\D3PO\source\repos\3D Game Programming with DirectX 11\D3DApp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -131,7 +131,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\D3PO\Google Drive\libraries\include;C:\Users\D3PO\Google Drive\libraries\DirectXTK-jul2020\Inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\D3PO\Google Drive\libraries\include\GLFW;C:\Users\D3PO\Google Drive\libraries\DirectXTK-jul2020\Inc;C:\Users\D3PO\source\repos\3D Game Programming with DirectX 11\D3DApp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -152,7 +152,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\D3PO\Google Drive\libraries\include;C:\Users\D3PO\Google Drive\libraries\DirectXTK-jul2020\Inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\D3PO\Google Drive\libraries\include\GLFW;C:\Users\D3PO\Google Drive\libraries\DirectXTK-jul2020\Inc;C:\Users\D3PO\source\repos\3D Game Programming with DirectX 11\D3DApp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -167,11 +167,8 @@
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\Google Drive\libraries\include\D3DApp\D3DApp.cpp" />
+    <ClCompile Include="..\D3DApp\D3DApp.cpp" />
     <ClCompile Include="main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\..\..\..\Google Drive\libraries\include\D3DApp\D3DApp.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PixelShader.hlsl">
@@ -216,6 +213,9 @@
     <ProjectReference Include="..\..\..\..\Google Drive\libraries\DirectXTK-jul2020\DirectXTK_Desktop_2019_Win10.vcxproj">
       <Project>{e0b52ae7-e160-4d32-bf3f-910b785e5a8e}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\D3DApp\D3DApp.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

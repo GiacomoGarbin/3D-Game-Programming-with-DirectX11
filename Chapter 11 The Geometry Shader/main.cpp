@@ -1,4 +1,4 @@
-#include <D3DApp/D3DApp.h>
+#include <D3DApp.h>
 
 #include <cassert>
 #include <string>
@@ -6,9 +6,6 @@
 #include <sstream>
 
 #include <d3dcompiler.h>
-
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
 
 #include <DDSTextureLoader.h>
 
@@ -142,7 +139,7 @@ bool TestApp::Init()
 {
 	if (D3DApp::Init())
 	{
-		std::wstring base = L"C:/Users/D3PO/source/repos/DirectX11Tutorial/Chapter 11 The Geometry Shader/";
+		std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/Chapter 11 The Geometry Shader/";
 
 		// vertex shader land and waves
 		{
@@ -709,7 +706,7 @@ bool TestApp::Init()
 		{
 			static auto CreateTexture = [this](std::wstring name, ID3D11ShaderResourceView** view) -> void
 			{
-				std::wstring base = L"C:/Users/D3PO/source/repos/DirectX11Tutorial/textures/";
+				std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
 				std::wstring path = base + name;
 
 				ID3D11Resource* resource = nullptr;
@@ -728,7 +725,7 @@ bool TestApp::Init()
 
 			static auto CreateTextureArray = [this](const std::vector<std::wstring>& names, ID3D11ShaderResourceView** view) -> void
 			{
-				std::wstring base = L"C:/Users/D3PO/source/repos/DirectX11Tutorial/textures/";
+				std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
 
 				std::vector<ID3D11Texture2D*> textures(names.size(), nullptr);
 
@@ -806,11 +803,11 @@ bool TestApp::Init()
 				}
 			};
 
-			CreateTexture(L"grass.dds", &mLand.mSRV);
-			CreateTexture(L"water2.dds", &mWaves.mSRV);
+			CreateTexture(L"grass.dds", mLand.mSRV.GetAddressOf());
+			CreateTexture(L"water2.dds", mWaves.mSRV.GetAddressOf());
 
 			std::vector<std::wstring> names = { L"tree0.dds", L"tree1.dds", L"tree2.dds", L"tree3.dds" };
-			CreateTextureArray(names, &mTree.mSRV);
+			CreateTextureArray(names, mTree.mSRV.GetAddressOf());
 
 		} // shader resource view
 
@@ -954,7 +951,7 @@ void TestApp::DrawScene()
 		SetPerObjectCB(obj);
 
 		// textures
-		mContext->PSSetShaderResources(0, 1, &obj->mSRV);
+		mContext->PSSetShaderResources(0, 1, obj->mSRV.GetAddressOf());
 
 		// rasterizer, blend and depth-stencil states
 		mContext->RSSetState(obj->mRasterizerState.Get());
@@ -970,6 +967,10 @@ void TestApp::DrawScene()
 		{
 			mContext->Draw(obj->mMesh.mVertices.size(), obj->mVertexStart);
 		}
+
+		// unbind SRV
+		ID3D11ShaderResourceView* const NullSRV = nullptr;
+		mContext->PSSetShaderResources(0, 1, &NullSRV);
 	};
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
