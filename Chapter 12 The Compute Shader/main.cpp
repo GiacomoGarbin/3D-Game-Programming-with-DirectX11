@@ -1250,7 +1250,7 @@ void TestApp::UpdateScene(float dt)
 
 		float r = GameMath::RandNorm(0.5f, 1.0f);
 
-		mWavesGenerator.Disturb(i, j, r);
+		//mWavesGenerator.Disturb(i, j, r);
 
 		// dispatch thread groups WaterDisturbCS
 		{
@@ -1274,10 +1274,6 @@ void TestApp::UpdateScene(float dt)
 			mContext->CSSetShaderResources(0, 1, &mCurrTextureSRV);
 			mContext->CSSetUnorderedAccessViews(0, 1, &mNextTextureUAV, nullptr);
 
-			//UINT GroupsX = std::ceil(mWavesGenerator.mCols / 64.0f);
-			//UINT GroupsY = std::ceil(mWavesGenerator.mRows / 64.0f);
-			//mContext->Dispatch(GroupsX, GroupsY, 1);
-
 			UINT GroupsX = std::ceil(mWavesGenerator.mCols / 256.0f);
 			mContext->Dispatch(GroupsX, mWavesGenerator.mRows, 1);
 
@@ -1289,21 +1285,11 @@ void TestApp::UpdateScene(float dt)
 			mContext->CSSetUnorderedAccessViews(0, 1, &NullUAV, nullptr);
 
 			// copy next to curr
-			//{
-			//	ID3D11Resource* pDstResource = nullptr; mCurrTextureSRV->GetResource(&pDstResource);
-			//	ID3D11Resource* pSrcResource = nullptr; mNextTextureUAV->GetResource(&pSrcResource);
-
-			//	mContext->CopyResource(pDstResource, pSrcResource);
-			//	mContext->Flush();
-
-			//	SafeRelease(pDstResource);
-			//	SafeRelease(pSrcResource);
-			//}
 			CopyTexture(mCurrTextureSRV, mNextTextureUAV);
 		}
 	}
 
-	mWavesGenerator.Update(dt);
+	//mWavesGenerator.Update(dt);
 
 	//D3D11_MAPPED_SUBRESOURCE MappedData;
 
@@ -1318,9 +1304,16 @@ void TestApp::UpdateScene(float dt)
 
 	//mContext->Unmap(mWaves.mVertexBuffer.Get(), 0);
 
-
 	// dispatch thread groups WaterUpdateCS
+
+	static float t = 0;
+
+	t += dt;
+
+	if (t >= mWavesGenerator.mTimeStep)
 	{
+		t = 0;
+
 		// WaterUpdateCS
 		//   input  : prev
 		//            curr
@@ -1343,14 +1336,7 @@ void TestApp::UpdateScene(float dt)
 		// bind SRV and UAV
 		mContext->CSSetShaderResources(0, 1, &mPrevTextureSRV);
 		mContext->CSSetShaderResources(1, 1, &mCurrTextureSRV);
-		//mContext->CSSetUnorderedAccessViews(0, 1, &mCurrTextureUAV, nullptr);
-		//mContext->CSSetUnorderedAccessViews(1, 1, &mNextTextureUAV, nullptr);
-		//mContext->CSSetShaderResources(0, 1, &mCurrTextureSRV);
 		mContext->CSSetUnorderedAccessViews(0, 1, &mNextTextureUAV, nullptr);
-
-		//UINT GroupsX = std::ceil(mWavesGenerator.mCols / 64.0f);
-		//UINT GroupsY = std::ceil(mWavesGenerator.mRows / 64.0f);
-		//mContext->Dispatch(GroupsX, GroupsY, 1);
 
 		UINT GroupsX = std::ceil(mWavesGenerator.mCols / 256.0f);
 		mContext->Dispatch(GroupsX, mWavesGenerator.mRows, 1);
@@ -1363,32 +1349,11 @@ void TestApp::UpdateScene(float dt)
 		mContext->CSSetUnorderedAccessViews(0, 2, NullUAV, nullptr);
 
 		// copy curr to prev
-		//{
-		//	ID3D11Resource* pDstResource = nullptr; mPrevTextureSRV->GetResource(&pDstResource);
-		//	ID3D11Resource* pSrcResource = nullptr; mCurrTextureSRV->GetResource(&pSrcResource);
-
-		//	mContext->CopyResource(pDstResource, pSrcResource);
-		//	mContext->Flush();
-
-		//	SafeRelease(pDstResource);
-		//	SafeRelease(pSrcResource);
-		//}
 		CopyTexture(mPrevTextureSRV, mCurrTextureSRV);
 
 		// copy next to curr
-		//{
-		//	ID3D11Resource* pDstResource = nullptr; mCurrTextureSRV->GetResource(&pDstResource);
-		//	ID3D11Resource* pSrcResource = nullptr; mNextTextureUAV->GetResource(&pSrcResource);
-
-		//	mContext->CopyResource(pDstResource, pSrcResource);
-		//	mContext->Flush();
-
-		//	SafeRelease(pDstResource);
-		//	SafeRelease(pSrcResource);
-		//}
 		CopyTexture(mCurrTextureSRV, mNextTextureUAV);
 	}
-
 
 	static XMFLOAT2 TexOffset = XMFLOAT2(0, 0);
 
@@ -1507,9 +1472,6 @@ void TestApp::DrawScene()
 	// blur effect
 
 	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
-
-	//ID3D11RenderTargetView* const NullRTV = nullptr;
-	//mContext->OMSetRenderTargets(1, &NullRTV, mDepthStencilView);
 
 	//mBlurEffect.Blur(mContext, *mScreenQuad.mSRV.GetAddressOf(), mScreenQuadUAV, 4);
 	//mBlurEffect.Blur(mContext, mScreenQuadSRV, mScreenQuadUAV, 4);
