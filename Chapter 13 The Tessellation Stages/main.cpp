@@ -20,8 +20,6 @@ public:
 	void UpdateScene(float dt) override;
 	void DrawScene() override;
 
-	//ID3D11InputLayout* mInputLayout;
-
 	XMMATRIX mWorld;
 	XMMATRIX mView;
 	XMMATRIX mProj;
@@ -61,14 +59,17 @@ public:
 	ID3D11Buffer* mPerFrameCB;
 	ID3D11Buffer* mFixedCB;
 
-	GameObject mLand;
-	GameObject mWaves;
-	GameObject mBox;
-	GameObject mTree;
+	//GameObject mLand;
+	//GameObject mWaves;
+	//GameObject mBox;
+	//GameObject mTree;
 
-	GeometryGenerator::Waves mWavesGenerator;
+	GameObject mQuad;
+	//ID3D11InputLayout* mInputLayout;
 
-	std::vector<GameObject*> mObjects;
+	//GeometryGenerator::Waves mWavesGenerator;
+
+	std::vector<GameObject*> mGameObjects;
 
 	LightDirectional mLights[3];
 
@@ -76,6 +77,7 @@ public:
 
 	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mNoCullRS;
 	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mCullClockwiseRS;
+	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mWireframeRS;
 	Microsoft::WRL::ComPtr<ID3D11BlendState> mNoRenderTargetWritesBS;
 	Microsoft::WRL::ComPtr<ID3D11BlendState> mTransparentBS;
 	Microsoft::WRL::ComPtr<ID3D11BlendState> mAlphaToCoverageBS;
@@ -83,62 +85,59 @@ public:
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mDrawReflectionDSS;
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mNoDoubleBlendDSS;
 
-	GameObject mScreenQuad;
+	//GameObject mScreenQuad;
 
-	ID3D11ShaderResourceView* mScreenQuadSRV;
+	//ID3D11ShaderResourceView* mScreenQuadSRV;
 	//Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mScreenQuadSRV;
-	ID3D11UnorderedAccessView* mScreenQuadUAV;
-	ID3D11RenderTargetView* mScreenQuadRTV;
+	//ID3D11UnorderedAccessView* mScreenQuadUAV;
+	//ID3D11RenderTargetView* mScreenQuadRTV;
 
-	BlurEffect mBlurEffect;
+	//BlurEffect mBlurEffect;
 
-	ID3D11ComputeShader* mWaterDisturbCS;
-	ID3D11Buffer* mWaterDisturbCB;
+	//ID3D11ComputeShader* mWaterDisturbCS;
+	//ID3D11Buffer* mWaterDisturbCB;
 
-	struct WaterDisturbCB
-	{
-		XMUINT2 mTexCoord;
-		float mMagnitude;
-		float mHalfMagnitude;
-	};
+	//struct WaterDisturbCB
+	//{
+	//	XMUINT2 mTexCoord;
+	//	float mMagnitude;
+	//	float mHalfMagnitude;
+	//};
 
-	ID3D11ComputeShader* mWaterUpdateCS;
-	ID3D11Buffer* mWaterUpdateCB;
+	//ID3D11ComputeShader* mWaterUpdateCS;
+	//ID3D11Buffer* mWaterUpdateCB;
 
-	struct WaterUpdateCB
-	{
-		float mK1;
-		float mK2;
-		float mK3;
-		float pad;
-	};
-	ID3D11ShaderResourceView* mPrevTextureSRV;
-	ID3D11ShaderResourceView* mCurrTextureSRV;
-	//ID3D11ShaderResourceView* mNextTextureSRV;
-	//ID3D11UnorderedAccessView* mPrevTextureUAV;
-	ID3D11UnorderedAccessView* mCurrTextureUAV;
-	ID3D11UnorderedAccessView* mNextTextureUAV;
+	//struct WaterUpdateCB
+	//{
+	//	float mK1;
+	//	float mK2;
+	//	float mK3;
+	//	float pad;
+	//};
+
+	//ID3D11ShaderResourceView* mPrevTextureSRV;
+	//ID3D11ShaderResourceView* mCurrTextureSRV;
+	//ID3D11UnorderedAccessView* mCurrTextureUAV;
+	//ID3D11UnorderedAccessView* mNextTextureUAV;
 };
 
 TestApp::TestApp() : D3DApp(),
-mPerObjectCB(nullptr),
-mPerFrameCB(nullptr),
-mFixedCB(nullptr),
-mSamplerState(nullptr),
-mScreenQuadUAV(nullptr),
-mScreenQuadRTV(nullptr),
+	mPerObjectCB(nullptr),
+	mPerFrameCB(nullptr),
+	mFixedCB(nullptr),
+	mSamplerState(nullptr)
+	//mScreenQuadUAV(nullptr),
+	//mScreenQuadRTV(nullptr),
 
-mWaterDisturbCS(nullptr),
-mWaterDisturbCB(nullptr),
-mWaterUpdateCS(nullptr),
-mWaterUpdateCB(nullptr),
+	//mWaterDisturbCS(nullptr),
+	//mWaterDisturbCB(nullptr),
+	//mWaterUpdateCS(nullptr),
+	//mWaterUpdateCB(nullptr),
 
-mPrevTextureSRV(nullptr),
-mCurrTextureSRV(nullptr),
-//mNextTextureSRV(nullptr),
-//mPrevTextureUAV(nullptr),
-mCurrTextureUAV(nullptr),
-mNextTextureUAV(nullptr)
+	//mPrevTextureSRV(nullptr),
+	//mCurrTextureSRV(nullptr),
+	//mCurrTextureUAV(nullptr),
+	//mNextTextureUAV(nullptr)
 {
 	mMainWindowTitle = "Ch13 The Tessellation Stages";
 
@@ -163,17 +162,17 @@ mNextTextureUAV(nullptr)
 	mLights[2].mSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 	mLights[2].mDirection = XMFLOAT3(0.0f, -0.707f, -0.707f);
 
-	mLand.mMaterial.mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-	mLand.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	mLand.mMaterial.mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 16.0f);
+	//mLand.mMaterial.mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
+	//mLand.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	//mLand.mMaterial.mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 16.0f);
 
-	mWaves.mMaterial.mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-	mWaves.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 0.5f);
-	mWaves.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 32.0f);
+	//mWaves.mMaterial.mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
+	//mWaves.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 0.5f);
+	//mWaves.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 32.0f);
 
-	mBox.mMaterial.mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-	mBox.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	mBox.mMaterial.mSpecular = XMFLOAT4(0.4f, 0.4f, 0.4f, 16.0f);
+	//mBox.mMaterial.mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
+	//mBox.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	//mBox.mMaterial.mSpecular = XMFLOAT4(0.4f, 0.4f, 0.4f, 16.0f);
 
 	//mTree.mMaterial.mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
 	//mTree.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -189,6 +188,7 @@ TestApp::~TestApp()
 	SafeRelease(mSamplerState);
 	SafeRelease((*mCullClockwiseRS.GetAddressOf()));
 	SafeRelease((*mNoCullRS.GetAddressOf()));
+	SafeRelease((*mWireframeRS.GetAddressOf()));
 	SafeRelease((*mNoRenderTargetWritesBS.GetAddressOf()));
 	SafeRelease((*mTransparentBS.GetAddressOf()));
 	SafeRelease((*mAlphaToCoverageBS.GetAddressOf()));
@@ -196,23 +196,18 @@ TestApp::~TestApp()
 	SafeRelease((*mDrawReflectionDSS.GetAddressOf()));
 	SafeRelease((*mNoDoubleBlendDSS.GetAddressOf()));
 
-	//SafeRelease(mScreenQuadVB);
-	//SafeRelease(mScreenQuadIB);
-	SafeRelease(mScreenQuadSRV);
-	//SafeRelease((*mScreenQuadSRV.GetAddressOf()));
-	SafeRelease(mScreenQuadUAV);
-	SafeRelease(mScreenQuadRTV);
+	//SafeRelease(mScreenQuadSRV);
+	//SafeRelease(mScreenQuadUAV);
+	//SafeRelease(mScreenQuadRTV);
 
-	SafeRelease(mWaterDisturbCS);
-	SafeRelease(mWaterDisturbCB);
-	SafeRelease(mWaterUpdateCS);
-	SafeRelease(mWaterUpdateCB);
-	SafeRelease(mPrevTextureSRV);
-	SafeRelease(mCurrTextureSRV);
-	//SafeRelease(mNextTextureSRV);
-	//SafeRelease(mPrevTextureUAV);
-	SafeRelease(mCurrTextureUAV);
-	SafeRelease(mNextTextureUAV);
+	//SafeRelease(mWaterDisturbCS);
+	//SafeRelease(mWaterDisturbCB);
+	//SafeRelease(mWaterUpdateCS);
+	//SafeRelease(mWaterUpdateCB);
+	//SafeRelease(mPrevTextureSRV);
+	//SafeRelease(mCurrTextureSRV);
+	//SafeRelease(mCurrTextureUAV);
+	//SafeRelease(mNextTextureUAV);
 }
 
 bool TestApp::Init()
@@ -222,202 +217,271 @@ bool TestApp::Init()
 		std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/";
 		std::wstring proj = L"Chapter 13 The Tessellation Stages/";
 
-		// vertex shader land and waves
+		// quad VS
 		{
 			Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
-
-			std::wstring path = base + proj + L"VertexShader.hlsl";
+			std::wstring path = base + proj + L"QuadVS.hlsl";
 
 			ID3DBlob* pCode;
 			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
 			HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			mLand.mVertexShader = shader;
-			//mWaves.mVertexShader = shader;
+			mQuad.mVertexShader = shader;
 
-			// input layout land and waves
+			// quad IL
 			{
 				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
 				{
-					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 40, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				};
 
 				Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
 
 				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
 
-				mLand.mInputLayout = layout;
-				//mWaves.mInputLayout = layout;
-			} // input layout
-		} // vertex shader
+				mQuad.mInputLayout = layout;
+			} // IL
+		} // VS
 
-		// pixel shader land and waves
+		// quad HS
+		{
+			Microsoft::WRL::ComPtr<ID3D11HullShader> shader;
+			std::wstring path = base + proj + L"QuadHS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "hs_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreateHullShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+
+			mQuad.mHullShader = shader;
+		} // quad HS
+
+		// quad DS
+		{
+			Microsoft::WRL::ComPtr<ID3D11DomainShader> shader;
+			std::wstring path = base + proj + L"QuadDS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "ds_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreateDomainShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+
+			mQuad.mDomainShader = shader;
+		} // quad DS
+
+		// quad PS
 		{
 			Microsoft::WRL::ComPtr<ID3D11PixelShader> shader;
-
-			std::wstring path = base + proj + L"PixelShader.hlsl";
+			std::wstring path = base + proj + L"QuadPS.hlsl";
 
 			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ "ENABLE_TEXTURE",        "1" });
-			defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
-			defines.push_back({ "ENABLE_LIGHTING",       "1" });
-			defines.push_back({ "ENABLE_FOG",            "1" });
+			//defines.push_back({ "ENABLE_TEXTURE",        "1" });
+			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
+			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
+			//defines.push_back({ "ENABLE_FOG",            "1" });
 			defines.push_back({ nullptr, nullptr });
 
 			ID3DBlob* pCode;
 			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
 			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			mLand.mPixelShader = shader;
-			mWaves.mPixelShader = shader;
-		} // pixel shader
+			mQuad.mPixelShader = shader;
+		} // PS
 
-		// compute shader horizontal blur
-		{
-			std::wstring path = base + proj + L"HorBlurCS.hlsl";
+		//// vertex shader land and waves
+		//{
+		//	Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
 
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mBlurEffect.mHorBlurCS));
-		} // compute shader
+		//	std::wstring path = base + proj + L"VertexShader.hlsl";
 
-		// compute shader vertical blur
-		{
-			std::wstring path = base + proj + L"VerBlurCS.hlsl";
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mBlurEffect.mVerBlurCS));
-		} // compute shader
+		//	mLand.mVertexShader = shader;
+		//	//mWaves.mVertexShader = shader;
 
-		// vertex shader screen quad
-		{
-			Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
+		//	// input layout land and waves
+		//	{
+		//		std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+		//		{
+		//			{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//			{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//			{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 40, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//		};
 
-			std::wstring path = base + proj + L"ScreenQuadVS.hlsl";
+		//		Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
 
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+		//		HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
 
-			mScreenQuad.mVertexShader = shader;
+		//		mLand.mInputLayout = layout;
+		//		//mWaves.mInputLayout = layout;
+		//	} // input layout
+		//} // vertex shader
 
-			// input layout screen quad
-			{
-				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
-				{
-					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 40, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				};
+		//// pixel shader land and waves
+		//{
+		//	Microsoft::WRL::ComPtr<ID3D11PixelShader> shader;
 
-				Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
+		//	std::wstring path = base + proj + L"PixelShader.hlsl";
 
-				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
+		//	std::vector<D3D_SHADER_MACRO> defines;
+		//	defines.push_back({ "ENABLE_TEXTURE",        "1" });
+		//	defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
+		//	defines.push_back({ "ENABLE_LIGHTING",       "1" });
+		//	defines.push_back({ "ENABLE_FOG",            "1" });
+		//	defines.push_back({ nullptr, nullptr });
 
-				mScreenQuad.mInputLayout = layout;
-			} // input layout
-		}
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-		// pixel shader screen quad
-		{
-			Microsoft::WRL::ComPtr<ID3D11PixelShader> shader;
+		//	mLand.mPixelShader = shader;
+		//	mWaves.mPixelShader = shader;
+		//} // pixel shader
 
-			//std::wstring path = base + L"ScreenQuadPS.hlsl";
-			std::wstring path = base + proj + L"PixelShader.hlsl";
+		//// compute shader horizontal blur
+		//{
+		//	std::wstring path = base + proj + L"HorBlurCS.hlsl";
 
-			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ "ENABLE_TEXTURE",        "1" });
-			defines.push_back({ "ENABLE_ALPHA_CLIPPING", "0" });
-			defines.push_back({ "ENABLE_LIGHTING",       "0" });
-			defines.push_back({ "ENABLE_FOG",            "0" });
-			defines.push_back({ nullptr, nullptr });
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mBlurEffect.mHorBlurCS));
+		//} // compute shader
 
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+		//// compute shader vertical blur
+		//{
+		//	std::wstring path = base + proj + L"VerBlurCS.hlsl";
 
-			mScreenQuad.mPixelShader = shader;
-		} // pixel shader
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mBlurEffect.mVerBlurCS));
+		//} // compute shader
 
-		// waves VS
-		{
-			Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
+		//// vertex shader screen quad
+		//{
+		//	Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
 
-			std::wstring path = base + proj + L"WaterVS.hlsl";
+		//	std::wstring path = base + proj + L"ScreenQuadVS.hlsl";
 
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			mWaves.mVertexShader = shader;
+		//	mScreenQuad.mVertexShader = shader;
 
-			// waves IL
-			{
-				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
-				{
-					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 40, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				};
+		//	// input layout screen quad
+		//	{
+		//		std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+		//		{
+		//			{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//			{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//			{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 40, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//		};
 
-				Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
+		//		Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
 
-				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
+		//		HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
 
-				mWaves.mInputLayout = layout;
-			} // waves IL
-		} // waves VS
+		//		mScreenQuad.mInputLayout = layout;
+		//	} // input layout
+		//}
 
-		// CS water disturb
-		{
-			std::wstring path = base + proj + L"WaterDisturbCS.hlsl";
+		//// pixel shader screen quad
+		//{
+		//	Microsoft::WRL::ComPtr<ID3D11PixelShader> shader;
 
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mWaterDisturbCS));
-		} // CS water disturb
+		//	//std::wstring path = base + L"ScreenQuadPS.hlsl";
+		//	std::wstring path = base + proj + L"PixelShader.hlsl";
 
-		// CB water disturb
-		{
-			static_assert((sizeof(WaterDisturbCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+		//	std::vector<D3D_SHADER_MACRO> defines;
+		//	defines.push_back({ "ENABLE_TEXTURE",        "1" });
+		//	defines.push_back({ "ENABLE_ALPHA_CLIPPING", "0" });
+		//	defines.push_back({ "ENABLE_LIGHTING",       "0" });
+		//	defines.push_back({ "ENABLE_FOG",            "0" });
+		//	defines.push_back({ nullptr, nullptr });
 
-			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(WaterDisturbCB);
-			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
-			desc.StructureByteStride = 0;
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			HR(mDevice->CreateBuffer(&desc, nullptr, &mWaterDisturbCB));
-		} // CB water disturb
+		//	mScreenQuad.mPixelShader = shader;
+		//} // pixel shader
 
-		// CS water update
-		{
-			std::wstring path = base + proj + L"WaterUpdateCS.hlsl";
+		//// waves VS
+		//{
+		//	Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
 
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mWaterUpdateCS));
-		} // CS water update
+		//	std::wstring path = base + proj + L"WaterVS.hlsl";
 
-		// CB water update
-		{
-			static_assert((sizeof(WaterUpdateCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(WaterUpdateCB);
-			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
-			desc.StructureByteStride = 0;
+		//	mWaves.mVertexShader = shader;
 
-			HR(mDevice->CreateBuffer(&desc, nullptr, &mWaterUpdateCB));
-		} // CB water update
+		//	// waves IL
+		//	{
+		//		std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+		//		{
+		//			{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//			{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//			{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 40, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		//		};
+
+		//		Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
+
+		//		HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
+
+		//		mWaves.mInputLayout = layout;
+		//	} // waves IL
+		//} // waves VS
+
+		//// CS water disturb
+		//{
+		//	std::wstring path = base + proj + L"WaterDisturbCS.hlsl";
+
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mWaterDisturbCS));
+		//} // CS water disturb
+
+		//// CB water disturb
+		//{
+		//	static_assert((sizeof(WaterDisturbCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+		//	D3D11_BUFFER_DESC desc;
+		//	desc.ByteWidth = sizeof(WaterDisturbCB);
+		//	desc.Usage = D3D11_USAGE_DEFAULT;
+		//	desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		//	desc.CPUAccessFlags = 0;
+		//	desc.MiscFlags = 0;
+		//	desc.StructureByteStride = 0;
+
+		//	HR(mDevice->CreateBuffer(&desc, nullptr, &mWaterDisturbCB));
+		//} // CB water disturb
+
+		//// CS water update
+		//{
+		//	std::wstring path = base + proj + L"WaterUpdateCS.hlsl";
+
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "cs_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateComputeShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mWaterUpdateCS));
+		//} // CS water update
+
+		//// CB water update
+		//{
+		//	static_assert((sizeof(WaterUpdateCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+		//	D3D11_BUFFER_DESC desc;
+		//	desc.ByteWidth = sizeof(WaterUpdateCB);
+		//	desc.Usage = D3D11_USAGE_DEFAULT;
+		//	desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		//	desc.CPUAccessFlags = 0;
+		//	desc.MiscFlags = 0;
+		//	desc.StructureByteStride = 0;
+
+		//	HR(mDevice->CreateBuffer(&desc, nullptr, &mWaterUpdateCB));
+		//} // CB water update
 
 		//// pixel shader no texture
 		//{
@@ -505,7 +569,7 @@ bool TestApp::Init()
 			desc.AntialiasedLineEnable = false;
 
 			HR(mDevice->CreateRasterizerState(&desc, &mNoCullRS));
-		} // CullClockwiseRS
+		} // NoCullRS
 
 		// CullClockwiseRS
 		{
@@ -523,6 +587,23 @@ bool TestApp::Init()
 
 			HR(mDevice->CreateRasterizerState(&desc, &mCullClockwiseRS));
 		} // CullClockwiseRS
+
+		// WireframeRS
+		{
+			D3D11_RASTERIZER_DESC desc;
+			desc.FillMode = D3D11_FILL_WIREFRAME;
+			desc.CullMode = D3D11_CULL_BACK;
+			desc.FrontCounterClockwise = false;
+			desc.DepthBias = 0;
+			desc.DepthBiasClamp = 0;
+			desc.SlopeScaledDepthBias = 0;
+			desc.DepthClipEnable = true;
+			desc.ScissorEnable = false;
+			desc.MultisampleEnable = false;
+			desc.AntialiasedLineEnable = false;
+
+			HR(mDevice->CreateRasterizerState(&desc, &mWireframeRS));
+		} // WireframeRS
 
 		// NoRenderTargetWritesBS
 		{
@@ -741,25 +822,25 @@ bool TestApp::Init()
 			//	mObjects.push_back(&mSkull);
 			//}
 
-			GeometryGenerator::CreateGrid(160, 160, 50, 50, mLand.mMesh);
+			//GeometryGenerator::CreateGrid(160, 160, 50, 50, mLand.mMesh);
 
-			auto GetHeight = [](float x, float z) -> float
-			{
-				return 0.3f * (z * std::sin(0.1f * x) + x * std::cos(0.1f * z));
-			};
+			//auto GetHeight = [](float x, float z) -> float
+			//{
+			//	return 0.3f * (z * std::sin(0.1f * x) + x * std::cos(0.1f * z));
+			//};
 
-			for (GeometryGenerator::Vertex& v : mLand.mMesh.mVertices)
-			{
-				v.mPosition.y = GetHeight(v.mPosition.x, v.mPosition.z);
-			}
+			//for (GeometryGenerator::Vertex& v : mLand.mMesh.mVertices)
+			//{
+			//	v.mPosition.y = GetHeight(v.mPosition.x, v.mPosition.z);
+			//}
 
-			mLand.mMesh.ComputeNormals();
+			//mLand.mMesh.ComputeNormals();
 
-			mLand.mVertexStart = 0;
+			//mLand.mVertexStart = 0;
 
-			mLand.mTexTransform = XMMatrixScaling(5, 5, 0);
+			//mLand.mTexTransform = XMMatrixScaling(5, 5, 0);
 
-			mObjects.push_back(&mLand);
+			//mObjects.push_back(&mLand);
 
 
 			//mTree.mMesh.mVertices.resize(16);
@@ -783,64 +864,79 @@ bool TestApp::Init()
 			//mObjects.push_back(&mTree);
 
 
-			GeometryGenerator::CreateGrid(160, 160, 160, 160, mWaves.mMesh);
+			//GeometryGenerator::CreateGrid(160, 160, 160, 160, mWaves.mMesh);
 
-			mWavesGenerator.Init(160, 160, 1, 0.03f, 5, 0.3f);
+			//mWavesGenerator.Init(160, 160, 1, 0.03f, 5, 0.3f);
 
-			mWaves.mBlendState = mTransparentBS;
+			//mWaves.mBlendState = mTransparentBS;
 
-			{
-				D3D11_TEXTURE2D_DESC desc;
-				desc.Width = mWavesGenerator.mCols;
-				desc.Height = mWavesGenerator.mRows;
-				desc.MipLevels = 1;
-				desc.ArraySize = 1;
-				desc.Format = DXGI_FORMAT_R32_FLOAT;
-				desc.SampleDesc.Count = 1;
-				desc.SampleDesc.Quality = 0;
-				desc.Usage = D3D11_USAGE_DEFAULT;
-				desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-				desc.CPUAccessFlags = 0;
-				desc.MiscFlags = 0;
+			//{
+			//	D3D11_TEXTURE2D_DESC desc;
+			//	desc.Width = mWavesGenerator.mCols;
+			//	desc.Height = mWavesGenerator.mRows;
+			//	desc.MipLevels = 1;
+			//	desc.ArraySize = 1;
+			//	desc.Format = DXGI_FORMAT_R32_FLOAT;
+			//	desc.SampleDesc.Count = 1;
+			//	desc.SampleDesc.Quality = 0;
+			//	desc.Usage = D3D11_USAGE_DEFAULT;
+			//	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			//	desc.CPUAccessFlags = 0;
+			//	desc.MiscFlags = 0;
 
-				{
-					ID3D11Texture2D* texture = nullptr;
-					HR(mDevice->CreateTexture2D(&desc, 0, &texture));
+			//	{
+			//		ID3D11Texture2D* texture = nullptr;
+			//		HR(mDevice->CreateTexture2D(&desc, 0, &texture));
 
-					HR(mDevice->CreateShaderResourceView(texture, nullptr, &mPrevTextureSRV));
-					//HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mPrevTextureUAV));
+			//		HR(mDevice->CreateShaderResourceView(texture, nullptr, &mPrevTextureSRV));
 
-					SafeRelease(texture);
-				}
+			//		SafeRelease(texture);
+			//	}
 
-				{
-					ID3D11Texture2D* texture = nullptr;
-					HR(mDevice->CreateTexture2D(&desc, 0, &texture));
+			//	{
+			//		ID3D11Texture2D* texture = nullptr;
+			//		HR(mDevice->CreateTexture2D(&desc, 0, &texture));
 
-					HR(mDevice->CreateShaderResourceView(texture, nullptr, &mCurrTextureSRV));
-					HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mCurrTextureUAV));
+			//		HR(mDevice->CreateShaderResourceView(texture, nullptr, &mCurrTextureSRV));
+			//		HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mCurrTextureUAV));
 
-					SafeRelease(texture);
-				}
+			//		SafeRelease(texture);
+			//	}
 
-				{
-					ID3D11Texture2D* texture = nullptr;
-					HR(mDevice->CreateTexture2D(&desc, 0, &texture));
+			//	{
+			//		ID3D11Texture2D* texture = nullptr;
+			//		HR(mDevice->CreateTexture2D(&desc, 0, &texture));
 
-					//HR(mDevice->CreateShaderResourceView(texture, nullptr, &mNextTextureSRV));
-					HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mNextTextureUAV));
+			//		HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mNextTextureUAV));
 
-					SafeRelease(texture);
-				}
-			}
+			//		SafeRelease(texture);
+			//	}
+			//}
 
-			mObjects.push_back(&mWaves);
+			//mObjects.push_back(&mWaves);
 
 
-			GeometryGenerator::CreateScreenQuad(mScreenQuad.mMesh);
+			//GeometryGenerator::CreateScreenQuad(mScreenQuad.mMesh);
 
-			mScreenQuad.mVertexStart = mLand.mVertexStart + mLand.mMesh.mVertices.size();
-			mScreenQuad.mIndexStart = mLand.mIndexStart + mLand.mMesh.mIndices.size();
+			//mScreenQuad.mVertexStart = mLand.mVertexStart + mLand.mMesh.mVertices.size();
+			//mScreenQuad.mIndexStart = mLand.mIndexStart + mLand.mMesh.mIndices.size();
+
+
+			auto& v = mQuad.mMesh.mVertices;
+			
+			v.clear();
+			v.resize(4);
+
+			v.at(0).mPosition = XMFLOAT3(-10, 0, +10);
+			v.at(1).mPosition = XMFLOAT3(+10, 0, +10);
+			v.at(2).mPosition = XMFLOAT3(-10, 0, -10);
+			v.at(3).mPosition = XMFLOAT3(+10, 0, -10);
+
+			mQuad.mRasterizerState = mWireframeRS;
+
+			mQuad.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST;
+
+			mGameObjects.push_back(&mQuad);
 
 		} // game objects
 
@@ -867,10 +963,10 @@ bool TestApp::Init()
 			UpdateBuffer(buffer, obj.mIndexStart, obj.mMesh.mIndices.size(), sizeof(UINT), obj.mMesh.mIndices.data());
 		};
 
-		// vertex buffer land and screen quad
+		// quad VB
 		{
 			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * (mLand.mMesh.mVertices.size() + mScreenQuad.mMesh.mVertices.size());
+			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mQuad.mMesh.mVertices.size();
 			desc.Usage = D3D11_USAGE_DEFAULT;
 			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 			desc.CPUAccessFlags = 0;
@@ -880,101 +976,86 @@ bool TestApp::Init()
 			Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
 			HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
 
-			//static auto UpdateBuffer = [this, &buffer](GameObject& obj) -> void
-			//{
-			//	D3D11_BOX region;
-			//	region.left = sizeof(GeometryGenerator::Vertex) * obj.mVertexStart;
-			//	region.right = sizeof(GeometryGenerator::Vertex) * (obj.mVertexStart + obj.mMesh.mVertices.size());
-			//	region.top = 0;
-			//	region.bottom = 1;
-			//	region.front = 0;
-			//	region.back = 1;
+			UpdateVertexBuffer(buffer, mQuad);
 
-			//	mContext->UpdateSubresource(*buffer.GetAddressOf(), 0, &region, obj.mMesh.mVertices.data(), 0, 0);
-			//};
+			mQuad.mVertexBuffer = buffer;
+		}
 
-			//UpdateBuffer(mLand);
-			//UpdateBuffer(mScreenQuad);
+		//// vertex buffer land and screen quad
+		//{
+		//	D3D11_BUFFER_DESC desc;
+		//	desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * (mLand.mMesh.mVertices.size() + mScreenQuad.mMesh.mVertices.size());
+		//	desc.Usage = D3D11_USAGE_DEFAULT;
+		//	desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		//	desc.CPUAccessFlags = 0;
+		//	desc.MiscFlags = 0;
+		//	desc.StructureByteStride = 0;
 
-			UpdateVertexBuffer(buffer, mLand);
-			UpdateVertexBuffer(buffer, mScreenQuad);
+		//	Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+		//	HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
 
-			mLand.mVertexBuffer = buffer;
-			mScreenQuad.mVertexBuffer = buffer;
+		//	UpdateVertexBuffer(buffer, mLand);
+		//	UpdateVertexBuffer(buffer, mScreenQuad);
 
-		} // vertex buffer
+		//	mLand.mVertexBuffer = buffer;
+		//	mScreenQuad.mVertexBuffer = buffer;
+		//} // vertex buffer
 
-		// index buffer land and screen quad
-		{
-			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(UINT) * (mLand.mMesh.mIndices.size() + mScreenQuad.mMesh.mIndices.size());
-			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
-			desc.StructureByteStride = 0;
+		//// index buffer land and screen quad
+		//{
+		//	D3D11_BUFFER_DESC desc;
+		//	desc.ByteWidth = sizeof(UINT) * (mLand.mMesh.mIndices.size() + mScreenQuad.mMesh.mIndices.size());
+		//	desc.Usage = D3D11_USAGE_DEFAULT;
+		//	desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		//	desc.CPUAccessFlags = 0;
+		//	desc.MiscFlags = 0;
+		//	desc.StructureByteStride = 0;
 
-			Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-			HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
+		//	Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+		//	HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
 
-			//static auto UpdateBuffer = [this, &buffer](GameObject& obj) -> void
-			//{
-			//	D3D11_BOX region;
-			//	region.left = sizeof(UINT) * obj.mIndexStart;
-			//	region.right = sizeof(UINT) * (obj.mIndexStart + obj.mMesh.mIndices.size());
-			//	region.top = 0;
-			//	region.bottom = 1;
-			//	region.front = 0;
-			//	region.back = 1;
+		//	UpdateIndexBuffer(buffer, mLand);
+		//	UpdateIndexBuffer(buffer, mScreenQuad);
 
-			//	mContext->UpdateSubresource(*buffer.GetAddressOf(), 0, &region, obj.mMesh.mIndices.data(), 0, 0);
-			//};
+		//	mLand.mIndexBuffer = buffer;
+		//	mScreenQuad.mIndexBuffer = buffer;
+		//} // index buffer
 
-			//UpdateBuffer(mLand);
-			//UpdateBuffer(mScreenQuad);
+		//// vertex buffer waves
+		//{
+		//	D3D11_BUFFER_DESC desc;
+		//	desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mWaves.mMesh.mVertices.size();
+		//	desc.Usage = D3D11_USAGE_IMMUTABLE; // D3D11_USAGE_DYNAMIC;
+		//	desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		//	desc.CPUAccessFlags = 0; // D3D11_CPU_ACCESS_WRITE;
+		//	desc.MiscFlags = 0;
+		//	desc.StructureByteStride = 0;
 
-			UpdateIndexBuffer(buffer, mLand);
-			UpdateIndexBuffer(buffer, mScreenQuad);
+		//	D3D11_SUBRESOURCE_DATA data;
+		//	data.pSysMem = mWaves.mMesh.mVertices.data();
+		//	data.SysMemPitch = 0;
+		//	data.SysMemSlicePitch = 0;
 
-			mLand.mIndexBuffer = buffer;
-			mScreenQuad.mIndexBuffer = buffer;
-		} // index buffer
+		//	HR(mDevice->CreateBuffer(&desc, &data, &mWaves.mVertexBuffer));
+		//} // vertex buffer
 
-		// vertex buffer waves
-		{
-			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mWaves.mMesh.mVertices.size();
-			desc.Usage = D3D11_USAGE_IMMUTABLE; // D3D11_USAGE_DYNAMIC;
-			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-			desc.CPUAccessFlags = 0; // D3D11_CPU_ACCESS_WRITE;
-			desc.MiscFlags = 0;
-			desc.StructureByteStride = 0;
+		//// index buffer waves
+		//{
+		//	D3D11_BUFFER_DESC desc;
+		//	desc.ByteWidth = sizeof(UINT) * mWaves.mMesh.mIndices.size();
+		//	desc.Usage = D3D11_USAGE_IMMUTABLE;
+		//	desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		//	desc.CPUAccessFlags = 0;
+		//	desc.MiscFlags = 0;
+		//	desc.StructureByteStride = 0;
 
-			D3D11_SUBRESOURCE_DATA data;
-			data.pSysMem = mWaves.mMesh.mVertices.data();
-			data.SysMemPitch = 0;
-			data.SysMemSlicePitch = 0;
+		//	D3D11_SUBRESOURCE_DATA data;
+		//	data.pSysMem = mWaves.mMesh.mIndices.data();
+		//	data.SysMemPitch = 0;
+		//	data.SysMemSlicePitch = 0;
 
-			HR(mDevice->CreateBuffer(&desc, &data, &mWaves.mVertexBuffer));
-		} // vertex buffer
-
-		// index buffer waves
-		{
-			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(UINT) * mWaves.mMesh.mIndices.size();
-			desc.Usage = D3D11_USAGE_IMMUTABLE;
-			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
-			desc.StructureByteStride = 0;
-
-			D3D11_SUBRESOURCE_DATA data;
-			data.pSysMem = mWaves.mMesh.mIndices.data();
-			data.SysMemPitch = 0;
-			data.SysMemSlicePitch = 0;
-
-			HR(mDevice->CreateBuffer(&desc, &data, &mWaves.mIndexBuffer));
-		} // index buffer
+		//	HR(mDevice->CreateBuffer(&desc, &data, &mWaves.mIndexBuffer));
+		//} // index buffer
 
 		// constant buffer per object
 		{
@@ -990,9 +1071,9 @@ bool TestApp::Init()
 
 			HR(mDevice->CreateBuffer(&desc, nullptr, &mPerObjectCB));
 
-			mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
+			//mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
 			//mContext->GSSetConstantBuffers(0, 1, &mCbPerObject);
-			mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
+			//mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
 		} // constant buffer per object
 
 		// constant buffer per frame
@@ -1010,7 +1091,7 @@ bool TestApp::Init()
 			HR(mDevice->CreateBuffer(&desc, nullptr, &mPerFrameCB));
 
 			//mContext->GSSetConstantBuffers(1, 1, &mCbPerFrame);
-			mContext->PSSetConstantBuffers(1, 1, &mPerFrameCB);
+			//mContext->PSSetConstantBuffers(1, 1, &mPerFrameCB);
 		} // constant buffer per frame
 
 		// fixed CB
@@ -1030,14 +1111,14 @@ bool TestApp::Init()
 			mContext->VSSetConstantBuffers(2, 1, &mFixedCB);
 		} // fixed CB
 
-		// upload fixed CB
-		{
-			FixedCB buffer;
-			buffer.mTexelSize.x = 1.0f / (mWavesGenerator.mCols - 1);
-			buffer.mTexelSize.y = 1.0f / (mWavesGenerator.mRows - 1);
-			buffer.mSpaceStep = mWavesGenerator.mSpaceStep;
-			mContext->UpdateSubresource(mFixedCB, 0, nullptr, &buffer, 0, 0);
-		} // upload fixed CB
+		//// upload fixed CB
+		//{
+		//	FixedCB buffer;
+		//	buffer.mTexelSize.x = 1.0f / (mWavesGenerator.mCols - 1);
+		//	buffer.mTexelSize.y = 1.0f / (mWavesGenerator.mRows - 1);
+		//	buffer.mSpaceStep = mWavesGenerator.mSpaceStep;
+		//	mContext->UpdateSubresource(mFixedCB, 0, nullptr, &buffer, 0, 0);
+		//} // upload fixed CB
 
 		// shader resource view
 		{
@@ -1140,8 +1221,8 @@ bool TestApp::Init()
 				}
 			};
 
-			CreateTexture(L"grass.dds", mLand.mSRV.GetAddressOf());
-			CreateTexture(L"water2.dds", mWaves.mSRV.GetAddressOf());
+			//CreateTexture(L"grass.dds", mLand.mSRV.GetAddressOf());
+			//CreateTexture(L"water2.dds", mWaves.mSRV.GetAddressOf());
 
 			//std::vector<std::wstring> names = { L"tree0.dds", L"tree1.dds", L"tree2.dds", L"tree3.dds" };
 			//CreateTextureArray(names, &mTree.mSRV);
@@ -1180,37 +1261,35 @@ void TestApp::OnResize(GLFWwindow* window, int width, int height)
 
 	mProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, AspectRatio(), 1, 1000);
 
-	{
-		SafeRelease(mScreenQuadSRV);
-		//SafeRelease((*mScreenQuad.mSRV.GetAddressOf()));
-		SafeRelease(mScreenQuadRTV);
-		SafeRelease(mScreenQuadUAV);
+	//{
+	//	SafeRelease(mScreenQuadSRV);
+	//	SafeRelease(mScreenQuadRTV);
+	//	SafeRelease(mScreenQuadUAV);
 
-		D3D11_TEXTURE2D_DESC desc;
-		desc.Width = mMainWindowWidth;
-		desc.Height = mMainWindowHeight;
-		desc.MipLevels = 1;
-		desc.ArraySize = 1;
-		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		desc.SampleDesc.Count = 1;
-		desc.SampleDesc.Quality = 0;
-		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-		desc.CPUAccessFlags = 0;
-		desc.MiscFlags = 0;
+	//	D3D11_TEXTURE2D_DESC desc;
+	//	desc.Width = mMainWindowWidth;
+	//	desc.Height = mMainWindowHeight;
+	//	desc.MipLevels = 1;
+	//	desc.ArraySize = 1;
+	//	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	//	desc.SampleDesc.Count = 1;
+	//	desc.SampleDesc.Quality = 0;
+	//	desc.Usage = D3D11_USAGE_DEFAULT;
+	//	desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	//	desc.CPUAccessFlags = 0;
+	//	desc.MiscFlags = 0;
 
-		ID3D11Texture2D* texture = nullptr;
-		HR(mDevice->CreateTexture2D(&desc, 0, &texture));
+	//	ID3D11Texture2D* texture = nullptr;
+	//	HR(mDevice->CreateTexture2D(&desc, 0, &texture));
 
-		HR(mDevice->CreateShaderResourceView(texture, nullptr, &mScreenQuadSRV));
-		//HR(mDevice->CreateShaderResourceView(texture, nullptr, mScreenQuad.mSRV.GetAddressOf()));
-		HR(mDevice->CreateRenderTargetView(texture, nullptr, &mScreenQuadRTV));
-		HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mScreenQuadUAV));
+	//	HR(mDevice->CreateShaderResourceView(texture, nullptr, &mScreenQuadSRV));
+	//	HR(mDevice->CreateRenderTargetView(texture, nullptr, &mScreenQuadRTV));
+	//	HR(mDevice->CreateUnorderedAccessView(texture, nullptr, &mScreenQuadUAV));
 
-		SafeRelease(texture);
-	}
+	//	SafeRelease(texture);
+	//}
 
-	mBlurEffect.OnResize(mDevice, mMainWindowWidth, mMainWindowHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
+	//mBlurEffect.OnResize(mDevice, mMainWindowWidth, mMainWindowHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
 }
 
 void TestApp::UpdateScene(float dt)
@@ -1240,55 +1319,55 @@ void TestApp::UpdateScene(float dt)
 		SafeRelease(pSrcResource);
 	};
 
-	static float BaseTime = 0;
+	//static float BaseTime = 0;
 
-	if ((mTimer.TotalTime() - BaseTime) >= 0.25f)
-	{
-		BaseTime += 0.25f;
+	//if ((mTimer.TotalTime() - BaseTime) >= 0.25f)
+	//{
+	//	BaseTime += 0.25f;
 
-		UINT i = 5 + rand() % (mWavesGenerator.mRows - 10);
-		UINT j = 5 + rand() % (mWavesGenerator.mCols - 10);
+	//	UINT i = 5 + rand() % (mWavesGenerator.mRows - 10);
+	//	UINT j = 5 + rand() % (mWavesGenerator.mCols - 10);
 
-		float r = GameMath::RandNorm(0.5f, 1.0f);
+	//	float r = GameMath::RandNorm(0.5f, 1.0f);
 
-		//mWavesGenerator.Disturb(i, j, r);
+	//	//mWavesGenerator.Disturb(i, j, r);
 
-		// dispatch thread groups WaterDisturbCS
-		{
-			// WaterDisturbCS
-			//   input  : curr
-			//   output : next
+	//	// dispatch thread groups WaterDisturbCS
+	//	{
+	//		// WaterDisturbCS
+	//		//   input  : curr
+	//		//   output : next
 
-			mContext->CSSetShader(mWaterDisturbCS, nullptr, 0);
+	//		mContext->CSSetShader(mWaterDisturbCS, nullptr, 0);
 
-			// bind CB
-			mContext->CSSetConstantBuffers(0, 1, &mWaterDisturbCB);
+	//		// bind CB
+	//		mContext->CSSetConstantBuffers(0, 1, &mWaterDisturbCB);
 
-			// upload CB
-			WaterDisturbCB buffer;
-			buffer.mTexCoord = XMUINT2(i, j);
-			buffer.mMagnitude = r;
-			buffer.mHalfMagnitude = r / 2;
-			mContext->UpdateSubresource(mWaterDisturbCB, 0, nullptr, &buffer, 0, 0);
+	//		// upload CB
+	//		WaterDisturbCB buffer;
+	//		buffer.mTexCoord = XMUINT2(i, j);
+	//		buffer.mMagnitude = r;
+	//		buffer.mHalfMagnitude = r / 2;
+	//		mContext->UpdateSubresource(mWaterDisturbCB, 0, nullptr, &buffer, 0, 0);
 
-			// bind SRV and UAV
-			mContext->CSSetShaderResources(0, 1, &mCurrTextureSRV);
-			mContext->CSSetUnorderedAccessViews(0, 1, &mNextTextureUAV, nullptr);
+	//		// bind SRV and UAV
+	//		mContext->CSSetShaderResources(0, 1, &mCurrTextureSRV);
+	//		mContext->CSSetUnorderedAccessViews(0, 1, &mNextTextureUAV, nullptr);
 
-			UINT GroupsX = std::ceil(mWavesGenerator.mCols / 256.0f);
-			mContext->Dispatch(GroupsX, mWavesGenerator.mRows, 1);
+	//		UINT GroupsX = std::ceil(mWavesGenerator.mCols / 256.0f);
+	//		mContext->Dispatch(GroupsX, mWavesGenerator.mRows, 1);
 
-			ID3D11ShaderResourceView* const NullSRV = nullptr;
-			ID3D11UnorderedAccessView* const NullUAV = nullptr;
+	//		ID3D11ShaderResourceView* const NullSRV = nullptr;
+	//		ID3D11UnorderedAccessView* const NullUAV = nullptr;
 
-			// unbind SRV and UAV
-			mContext->CSSetShaderResources(0, 1, &NullSRV);
-			mContext->CSSetUnorderedAccessViews(0, 1, &NullUAV, nullptr);
+	//		// unbind SRV and UAV
+	//		mContext->CSSetShaderResources(0, 1, &NullSRV);
+	//		mContext->CSSetUnorderedAccessViews(0, 1, &NullUAV, nullptr);
 
-			// copy next to curr
-			CopyTexture(mCurrTextureSRV, mNextTextureUAV);
-		}
-	}
+	//		// copy next to curr
+	//		CopyTexture(mCurrTextureSRV, mNextTextureUAV);
+	//	}
+	//}
 
 	//mWavesGenerator.Update(dt);
 
@@ -1307,61 +1386,61 @@ void TestApp::UpdateScene(float dt)
 
 	// dispatch thread groups WaterUpdateCS
 
-	static float t = 0;
+	//static float t = 0;
 
-	t += dt;
+	//t += dt;
 
-	if (t >= mWavesGenerator.mTimeStep)
-	{
-		t = 0;
+	//if (t >= mWavesGenerator.mTimeStep)
+	//{
+	//	t = 0;
 
-		// WaterUpdateCS
-		//   input  : prev
-		//            curr
-		//   output : curr
-		//            next
+	//	// WaterUpdateCS
+	//	//   input  : prev
+	//	//            curr
+	//	//   output : curr
+	//	//            next
 
-		// bind shader
-		mContext->CSSetShader(mWaterUpdateCS, nullptr, 0);
+	//	// bind shader
+	//	mContext->CSSetShader(mWaterUpdateCS, nullptr, 0);
 
-		// bind CB
-		mContext->CSSetConstantBuffers(0, 1, &mWaterUpdateCB);
+	//	// bind CB
+	//	mContext->CSSetConstantBuffers(0, 1, &mWaterUpdateCB);
 
-		// upload CB
-		WaterUpdateCB buffer;
-		buffer.mK1 = mWavesGenerator.mK1;
-		buffer.mK2 = mWavesGenerator.mK2;
-		buffer.mK3 = mWavesGenerator.mK3;
-		mContext->UpdateSubresource(mWaterUpdateCB, 0, nullptr, &buffer, 0, 0);
+	//	// upload CB
+	//	WaterUpdateCB buffer;
+	//	buffer.mK1 = mWavesGenerator.mK1;
+	//	buffer.mK2 = mWavesGenerator.mK2;
+	//	buffer.mK3 = mWavesGenerator.mK3;
+	//	mContext->UpdateSubresource(mWaterUpdateCB, 0, nullptr, &buffer, 0, 0);
 
-		// bind SRV and UAV
-		mContext->CSSetShaderResources(0, 1, &mPrevTextureSRV);
-		mContext->CSSetShaderResources(1, 1, &mCurrTextureSRV);
-		mContext->CSSetUnorderedAccessViews(0, 1, &mNextTextureUAV, nullptr);
+	//	// bind SRV and UAV
+	//	mContext->CSSetShaderResources(0, 1, &mPrevTextureSRV);
+	//	mContext->CSSetShaderResources(1, 1, &mCurrTextureSRV);
+	//	mContext->CSSetUnorderedAccessViews(0, 1, &mNextTextureUAV, nullptr);
 
-		UINT GroupsX = std::ceil(mWavesGenerator.mCols / 256.0f);
-		mContext->Dispatch(GroupsX, mWavesGenerator.mRows, 1);
+	//	UINT GroupsX = std::ceil(mWavesGenerator.mCols / 256.0f);
+	//	mContext->Dispatch(GroupsX, mWavesGenerator.mRows, 1);
 
-		ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
-		ID3D11UnorderedAccessView* const NullUAV[2] = { nullptr, nullptr };
+	//	ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
+	//	ID3D11UnorderedAccessView* const NullUAV[2] = { nullptr, nullptr };
 
-		// unbind
-		mContext->CSSetShaderResources(0, 2, NullSRV);
-		mContext->CSSetUnorderedAccessViews(0, 2, NullUAV, nullptr);
+	//	// unbind
+	//	mContext->CSSetShaderResources(0, 2, NullSRV);
+	//	mContext->CSSetUnorderedAccessViews(0, 2, NullUAV, nullptr);
 
-		// copy curr to prev
-		CopyTexture(mPrevTextureSRV, mCurrTextureSRV);
+	//	// copy curr to prev
+	//	CopyTexture(mPrevTextureSRV, mCurrTextureSRV);
 
-		// copy next to curr
-		CopyTexture(mCurrTextureSRV, mNextTextureUAV);
-	}
+	//	// copy next to curr
+	//	CopyTexture(mCurrTextureSRV, mNextTextureUAV);
+	//}
 
-	static XMFLOAT2 TexOffset = XMFLOAT2(0, 0);
+	//static XMFLOAT2 TexOffset = XMFLOAT2(0, 0);
 
-	TexOffset.x += 0.10f * dt;
-	TexOffset.y += 0.05f * dt;
+	//TexOffset.x += 0.10f * dt;
+	//TexOffset.y += 0.05f * dt;
 
-	mWaves.mTexTransform = XMMatrixScaling(5, 5, 0) * XMMatrixTranslation(TexOffset.x, TexOffset.y, 0);
+	//mWaves.mTexTransform = XMMatrixScaling(5, 5, 0) * XMMatrixTranslation(TexOffset.x, TexOffset.y, 0);
 }
 
 void TestApp::DrawScene()
@@ -1381,6 +1460,12 @@ void TestApp::DrawScene()
 		XMStoreFloat4(&buffer.mFogColor, Colors::Silver);
 
 		mContext->UpdateSubresource(mPerFrameCB, 0, 0, &buffer, 0, 0);
+
+		mContext->VSSetConstantBuffers(1, 1, &mPerFrameCB);
+		mContext->HSSetConstantBuffers(1, 1, &mPerFrameCB);
+		mContext->DSSetConstantBuffers(1, 1, &mPerFrameCB);
+		mContext->GSSetConstantBuffers(1, 1, &mPerFrameCB);
+		mContext->PSSetConstantBuffers(1, 1, &mPerFrameCB);
 	};
 
 	static auto SetPerObjectCB = [this](GameObject* obj) -> void
@@ -1393,6 +1478,12 @@ void TestApp::DrawScene()
 		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
 
 		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
+
+		mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
+		mContext->HSSetConstantBuffers(0, 1, &mPerObjectCB);
+		mContext->DSSetConstantBuffers(0, 1, &mPerObjectCB);
+		mContext->GSSetConstantBuffers(0, 1, &mPerObjectCB);
+		mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
 	};
 
 	static auto DrawGameObject = [this](GameObject* obj) -> void
@@ -1404,6 +1495,8 @@ void TestApp::DrawScene()
 
 		// shaders
 		mContext->VSSetShader(obj->mVertexShader.Get(), nullptr, 0);
+		mContext->HSSetShader(obj->mHullShader.Get(), nullptr, 0);
+		mContext->DSSetShader(obj->mDomainShader.Get(), nullptr, 0);
 		mContext->GSSetShader(obj->mGeometryShader.Get(), nullptr, 0);
 		mContext->PSSetShader(obj->mPixelShader.Get(), nullptr, 0);
 
@@ -1426,11 +1519,11 @@ void TestApp::DrawScene()
 			mContext->PSSetShaderResources(0, 1, obj->mSRV.GetAddressOf());
 		}
 
-		// dispacement map
-		if (obj == &mWaves)
-		{
-			mContext->VSSetShaderResources(1, 1, &mCurrTextureSRV);
-		}
+		//// dispacement map
+		//if (obj == &mWaves)
+		//{
+		//	mContext->VSSetShaderResources(1, 1, &mCurrTextureSRV);
+		//}
 
 		// rasterizer, blend and depth-stencil states
 		mContext->RSSetState(obj->mRasterizerState.Get());
@@ -1451,43 +1544,21 @@ void TestApp::DrawScene()
 		ID3D11ShaderResourceView* const NullSRV = nullptr;
 		mContext->PSSetShaderResources(0, 1, &NullSRV);
 
-		if (obj == &mWaves)
-		{
-			mContext->PSSetShaderResources(1, 1, &NullSRV);
-		}
+		//if (obj == &mWaves)
+		//{
+		//	mContext->PSSetShaderResources(1, 1, &NullSRV);
+		//}
 	};
 
-	// render to offscreen texture
-	mContext->OMSetRenderTargets(1, &mScreenQuadRTV, mDepthStencilView);
-
-	mContext->ClearRenderTargetView(mScreenQuadRTV, Colors::Silver);
+	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
 	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 
 	SetPerFrameCB();
 
-	for (GameObject* obj : mObjects)
+	for (GameObject* obj : mGameObjects)
 	{
 		DrawGameObject(obj);
 	}
-
-	// blur effect
-
-	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
-
-	//mBlurEffect.Blur(mContext, *mScreenQuad.mSRV.GetAddressOf(), mScreenQuadUAV, 4);
-	//mBlurEffect.Blur(mContext, mScreenQuadSRV, mScreenQuadUAV, 4);
-
-	// draw screen quad
-	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
-	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
-
-	mContext->PSSetShaderResources(0, 1, &mScreenQuadSRV);
-	//mContext->PSSetShaderResources(0, 1, &mCurrTextureSRV);
-
-	DrawGameObject(&mScreenQuad);
-
-	//ID3D11ShaderResourceView* NullSRV[1] = { nullptr };
-	//mContext->PSSetShaderResources(0, 1, NullSRV);
 
 	mSwapChain->Present(0, 0);
 }

@@ -224,9 +224,7 @@ class GameObject
 public:
 	GeometryGenerator::Mesh mMesh;
 
-	//ID3D11Buffer* mVertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> mVertexBuffer;
-	//ID3D11Buffer* mIndexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> mIndexBuffer;
 
 	UINT mVertexStart;
@@ -251,6 +249,8 @@ public:
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mSRV;
 
 	Microsoft::WRL::ComPtr<ID3D11VertexShader> mVertexShader;
+	Microsoft::WRL::ComPtr<ID3D11HullShader> mHullShader;
+	Microsoft::WRL::ComPtr<ID3D11DomainShader> mDomainShader;
 	Microsoft::WRL::ComPtr<ID3D11GeometryShader> mGeometryShader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader>  mPixelShader;
 	Microsoft::WRL::ComPtr<ID3D11InputLayout> mInputLayout;
@@ -271,6 +271,8 @@ public:
 		mTexTransform(XMMatrixIdentity()),
 		mSRV(nullptr),
 		mVertexShader(nullptr),
+		mHullShader(nullptr),
+		mDomainShader(nullptr),
 		mGeometryShader(nullptr),
 		mPixelShader(nullptr),
 		mInputLayout(nullptr),
