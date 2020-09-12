@@ -40,5 +40,11 @@
     <FxCompile Include="QuadDS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="BezierHS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="BezierDS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

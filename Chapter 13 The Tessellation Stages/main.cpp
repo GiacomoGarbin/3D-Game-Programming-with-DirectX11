@@ -64,8 +64,8 @@ public:
 	//GameObject mBox;
 	//GameObject mTree;
 
-	GameObject mQuad;
-	//ID3D11InputLayout* mInputLayout;
+	//GameObject mQuad;
+	GameObject mBezierSurface;
 
 	//GeometryGenerator::Waves mWavesGenerator;
 
@@ -221,12 +221,14 @@ bool TestApp::Init()
 		{
 			Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
 			std::wstring path = base + proj + L"QuadVS.hlsl";
+			//std::wstring path = base + proj + L"BezierVS.hlsl";
 
 			ID3DBlob* pCode;
 			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
 			HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			mQuad.mVertexShader = shader;
+			//mQuad.mVertexShader = shader;
+			mBezierSurface.mVertexShader = shader;
 
 			// quad IL
 			{
@@ -239,33 +241,58 @@ bool TestApp::Init()
 
 				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
 
-				mQuad.mInputLayout = layout;
+				//mQuad.mInputLayout = layout;
+				mBezierSurface.mInputLayout = layout;
 			} // IL
 		} // VS
 
-		// quad HS
+		//// quad HS
+		//{
+		//	Microsoft::WRL::ComPtr<ID3D11HullShader> shader;
+		//	std::wstring path = base + proj + L"QuadHS.hlsl";
+
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "hs_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateHullShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+
+		//	mQuad.mHullShader = shader;
+		//} // quad HS
+
+		// bezier HS
 		{
 			Microsoft::WRL::ComPtr<ID3D11HullShader> shader;
-			std::wstring path = base + proj + L"QuadHS.hlsl";
+			std::wstring path = base + proj + L"BezierHS.hlsl";
 
 			ID3DBlob* pCode;
 			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "hs_5_0", 0, 0, &pCode, nullptr));
 			HR(mDevice->CreateHullShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			mQuad.mHullShader = shader;
-		} // quad HS
+			mBezierSurface.mHullShader = shader;
+		} // bezier HS
 
-		// quad DS
+		//// quad DS
+		//{
+		//	Microsoft::WRL::ComPtr<ID3D11DomainShader> shader;
+		//	std::wstring path = base + proj + L"QuadDS.hlsl";
+
+		//	ID3DBlob* pCode;
+		//	HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "ds_5_0", 0, 0, &pCode, nullptr));
+		//	HR(mDevice->CreateDomainShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+
+		//	mQuad.mDomainShader = shader;
+		//} // quad DS
+
+		// bezier DS
 		{
 			Microsoft::WRL::ComPtr<ID3D11DomainShader> shader;
-			std::wstring path = base + proj + L"QuadDS.hlsl";
+			std::wstring path = base + proj + L"BezierDS.hlsl";
 
 			ID3DBlob* pCode;
 			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "ds_5_0", 0, 0, &pCode, nullptr));
 			HR(mDevice->CreateDomainShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			mQuad.mDomainShader = shader;
-		} // quad DS
+			mBezierSurface.mDomainShader = shader;
+		} // bezier DS
 
 		// quad PS
 		{
@@ -283,7 +310,8 @@ bool TestApp::Init()
 			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
 			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-			mQuad.mPixelShader = shader;
+			//mQuad.mPixelShader = shader;
+			mBezierSurface.mPixelShader = shader;
 		} // PS
 
 		//// vertex shader land and waves
@@ -592,7 +620,7 @@ bool TestApp::Init()
 		{
 			D3D11_RASTERIZER_DESC desc;
 			desc.FillMode = D3D11_FILL_WIREFRAME;
-			desc.CullMode = D3D11_CULL_BACK;
+			desc.CullMode = D3D11_CULL_NONE;
 			desc.FrontCounterClockwise = false;
 			desc.DepthBias = 0;
 			desc.DepthBiasClamp = 0;
@@ -922,21 +950,53 @@ bool TestApp::Init()
 			//mScreenQuad.mIndexStart = mLand.mIndexStart + mLand.mMesh.mIndices.size();
 
 
-			auto& v = mQuad.mMesh.mVertices;
-			
+			//auto& v = mQuad.mMesh.mVertices;
+			//
+			//v.clear();
+			//v.resize(4);
+
+			//v.at(0).mPosition = XMFLOAT3(-10, 0, +10);
+			//v.at(1).mPosition = XMFLOAT3(+10, 0, +10);
+			//v.at(2).mPosition = XMFLOAT3(-10, 0, -10);
+			//v.at(3).mPosition = XMFLOAT3(+10, 0, -10);
+
+			//mQuad.mRasterizerState = mWireframeRS;
+
+			//mQuad.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST;
+
+			//mGameObjects.push_back(&mQuad);
+
+
+			auto& v = mBezierSurface.mMesh.mVertices;
+
 			v.clear();
-			v.resize(4);
+			v.resize(16);
 
-			v.at(0).mPosition = XMFLOAT3(-10, 0, +10);
-			v.at(1).mPosition = XMFLOAT3(+10, 0, +10);
-			v.at(2).mPosition = XMFLOAT3(-10, 0, -10);
-			v.at(3).mPosition = XMFLOAT3(+10, 0, -10);
+			v.at(0).mPosition = XMFLOAT3(-10, -10, +15);
+			v.at(1).mPosition = XMFLOAT3(-5, 0, +15);
+			v.at(2).mPosition = XMFLOAT3(+5, 0, +15);
+			v.at(3).mPosition = XMFLOAT3(+10, 0, +15);
 
-			mQuad.mRasterizerState = mWireframeRS;
+			v.at(4).mPosition = XMFLOAT3(-15, 0, +5);
+			v.at(5).mPosition = XMFLOAT3(-5, 0, +5);
+			v.at(6).mPosition = XMFLOAT3(+5, 20, +5);
+			v.at(7).mPosition = XMFLOAT3(+15, 0, +5);
 
-			mQuad.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST;
+			v.at(8).mPosition = XMFLOAT3(-15, 0, -5);
+			v.at(9).mPosition = XMFLOAT3(-5, 0, -5);
+			v.at(10).mPosition = XMFLOAT3(+5, 0, -5);
+			v.at(11).mPosition = XMFLOAT3(+15, 0, -5);
 
-			mGameObjects.push_back(&mQuad);
+			v.at(12).mPosition = XMFLOAT3(-10, 10, -15);
+			v.at(13).mPosition = XMFLOAT3(-5, 0, -15);
+			v.at(14).mPosition = XMFLOAT3(+5, 0, -15);
+			v.at(15).mPosition = XMFLOAT3(+25, 10, -15);
+
+			mBezierSurface.mRasterizerState = mWireframeRS;
+
+			mBezierSurface.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_16_CONTROL_POINT_PATCHLIST;
+
+			mGameObjects.push_back(&mBezierSurface);
 
 		} // game objects
 
@@ -963,10 +1023,28 @@ bool TestApp::Init()
 			UpdateBuffer(buffer, obj.mIndexStart, obj.mMesh.mIndices.size(), sizeof(UINT), obj.mMesh.mIndices.data());
 		};
 
-		// quad VB
+		//// quad VB
+		//{
+		//	D3D11_BUFFER_DESC desc;
+		//	desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mQuad.mMesh.mVertices.size();
+		//	desc.Usage = D3D11_USAGE_DEFAULT;
+		//	desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		//	desc.CPUAccessFlags = 0;
+		//	desc.MiscFlags = 0;
+		//	desc.StructureByteStride = 0;
+
+		//	Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+		//	HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
+
+		//	UpdateVertexBuffer(buffer, mQuad);
+
+		//	mQuad.mVertexBuffer = buffer;
+		//}
+
+		// bezier VB
 		{
 			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mQuad.mMesh.mVertices.size();
+			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mBezierSurface.mMesh.mVertices.size();
 			desc.Usage = D3D11_USAGE_DEFAULT;
 			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 			desc.CPUAccessFlags = 0;
@@ -976,9 +1054,9 @@ bool TestApp::Init()
 			Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
 			HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
 
-			UpdateVertexBuffer(buffer, mQuad);
+			UpdateVertexBuffer(buffer, mBezierSurface);
 
-			mQuad.mVertexBuffer = buffer;
+			mBezierSurface.mVertexBuffer = buffer;
 		}
 
 		//// vertex buffer land and screen quad
