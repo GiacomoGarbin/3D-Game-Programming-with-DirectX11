@@ -7,6 +7,7 @@
 #include <fstream>
 #include <algorithm>
 #include <vector>
+#include <array>
 
 #include <glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -73,6 +74,41 @@ public:
 	void Tick();
 };
 
+class CameraObject
+{
+public:
+	// camera
+	XMFLOAT3 mPosition;
+	XMFLOAT3 mRight;
+	XMFLOAT3 mUp;
+	XMFLOAT3 mLook;
+
+	// frustum
+	float mNearZ;
+	float mFarZ;
+	float mAspectRatio;
+	float mFovAngleY;
+	float mNearWindowHeight;
+	float mFarWindowHeight;
+
+	// view/proj
+	// XMMATRIX mView;
+	XMFLOAT4X4 mView;
+	XMMATRIX mProj;
+
+	CameraObject();
+
+	void SetFrustum(float FovAngleY, float AspectRatio, float NearZ, float FarZ);
+
+	void walk(float delta);
+	void strafe(float delta);
+
+	void UpdateView();
+
+	void pitch(float angle);
+	void rotate(float angle);
+};
+
 class D3DApp
 {
 public:
@@ -85,6 +121,8 @@ public:
 	virtual void OnResize(GLFWwindow* window, int width, int height);
 	virtual void OnMouseButton(GLFWwindow* window, int button, int action, int mods);
 	virtual void OnMouseMove(GLFWwindow* window, double xpos, double ypos);
+	virtual void OnKeyButton(GLFWwindow* window, int key, int scancode, int action, int mods);
+	bool IsKeyPressed(int key) { return mKeysState.at(key); }
 	virtual void UpdateScene(float dt) = 0;
 	virtual void DrawScene() = 0;
 
@@ -116,12 +154,15 @@ protected:
 	int mMainWindowHeight;
 	std::string mMainWindowTitle;
 	bool mResizing;
+	std::array<bool, GLFW_KEY_LAST> mKeysState;
 
 	// mouse events
 	float mTheta;
 	float mPhi;
 	float mRadius;
 	XMFLOAT2 mLastMousePos;
+
+	CameraObject mCamera;
 };
 
 class GeometryGenerator

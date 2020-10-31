@@ -110,6 +110,11 @@ D3DApp::D3DApp() :
 	mLastMousePos(0, 0)
 {
 	ZeroMemory(&mViewport, sizeof(D3D11_VIEWPORT));
+
+	std::fill(mKeysState.begin(), mKeysState.end(), false);
+	
+	mCamera.mPosition = XMFLOAT3(0, 2, -15);
+	// mCamera.mPosition = XMVectorSet(0, 2, -15, 1);
 }
 
 D3DApp::~D3DApp()
@@ -187,6 +192,12 @@ bool D3DApp::InitMainWindow()
 	{
 		D3DApp* app = reinterpret_cast<D3DApp*>(glfwGetWindowUserPointer(window));
 		app->OnMouseMove(window, xpos, ypos);
+	});
+
+	glfwSetKeyCallback(mMainWindow, [](GLFWwindow* window, int key, int scancode, int action, int mods)
+	{
+		D3DApp* app = reinterpret_cast<D3DApp*>(glfwGetWindowUserPointer(window));
+		app->OnKeyButton(window, key, scancode, action, mods);
 	});
 
 	return true;
@@ -360,6 +371,10 @@ void D3DApp::OnResize(GLFWwindow* window, int width, int height)
 	mViewport.MaxDepth = 1;
 
 	mContext->RSSetViewports(1, &mViewport);
+
+	// update proj matrix
+
+	mCamera.SetFrustum(XM_PIDIV4, AspectRatio(), 1, 1000);
 }
 
 void D3DApp::OnMouseButton(GLFWwindow* window, int button, int action, int mods)
@@ -374,27 +389,54 @@ void D3DApp::OnMouseButton(GLFWwindow* window, int button, int action, int mods)
 
 void D3DApp::OnMouseMove(GLFWwindow* window, double xpos, double ypos)
 {
+	//if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+	//{
+	//	float dx = 0.25f * XMConvertToRadians(xpos - mLastMousePos.x);
+	//	float dy = 0.25f * XMConvertToRadians(ypos - mLastMousePos.y);
+
+	//	mTheta += dx;
+	//	mPhi += dy;
+
+	//	mPhi = std::clamp(mPhi, 0.1f, XM_PI - 0.1f);
+	//}
+	//else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+	//{
+	//	float dx = 0.5f * XMConvertToRadians(xpos - mLastMousePos.x);
+	//	float dy = 0.5f * XMConvertToRadians(ypos - mLastMousePos.y);
+
+	//	mRadius += (dx - dy);
+
+	//	mRadius = std::clamp(mRadius, 3.f, 150.f);
+	//}
+
+
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
 	{
-		float dx = 0.25f * XMConvertToRadians(xpos - mLastMousePos.x);
-		float dy = 0.25f * XMConvertToRadians(ypos - mLastMousePos.y);
+		float dx = XMConvertToRadians(0.25f * (xpos - mLastMousePos.x));
+		float dy = XMConvertToRadians(0.25f * (ypos - mLastMousePos.y));
 
-		mTheta += dx;
-		mPhi += dy;
+		mCamera.pitch(dy);
+		mCamera.rotate(dx);
 
-		mPhi = std::clamp(mPhi, 0.1f, XM_PI - 0.1f);
+		mLastMousePos = XMFLOAT2(xpos, ypos);
 	}
-	else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+}
+
+void D3DApp::OnKeyButton(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	if (key == GLFW_KEY_UNKNOWN) return;
+
+	switch (action)
 	{
-		float dx = 0.5f * XMConvertToRadians(xpos - mLastMousePos.x);
-		float dy = 0.5f * XMConvertToRadians(ypos - mLastMousePos.y);
-
-		mRadius += (dx - dy);
-
-		mRadius = std::clamp(mRadius, 3.f, 150.f);
+		case GLFW_PRESS:
+			mKeysState[key] = true;
+			break;
+		case GLFW_RELEASE:
+			mKeysState[key] = false;
+			break;
+		case GLFW_REPEAT:
+			break;
 	}
-
-	mLastMousePos = XMFLOAT2(xpos, ypos);
 }
 
 void D3DApp::CalculateFrameStats()
@@ -1262,3 +1304,101 @@ void BlurEffect::Blur(ID3D11DeviceContext* context, ID3D11ShaderResourceView* In
 //
 //	Effects::BlurFX->SetWeights(weights);
 //}
+
+CameraObject::CameraObject() :
+	mPosition(0, 0, 0),
+	mRight(1, 0, 0),
+	mUp(0, 1, 0),
+	mLook(0, 0, 1)
+{
+
+}
+
+void CameraObject::SetFrustum(float FovAngleY, float AspectRatio, float NearZ, float FarZ)
+{
+	mFovAngleY = FovAngleY;
+	mAspectRatio = AspectRatio;
+	mNearZ = NearZ;
+	mFarZ = FarZ;
+
+	mProj = XMMatrixPerspectiveFovLH(mFovAngleY, mAspectRatio, mNearZ, mFarZ);
+}
+
+void CameraObject::UpdateView()
+{
+	XMVECTOR R = XMLoadFloat3(&mRight);
+	XMVECTOR U = XMLoadFloat3(&mUp);
+	XMVECTOR L = XMLoadFloat3(&mLook);
+	XMVECTOR P = XMLoadFloat3(&mPosition);
+
+	L = XMVector3Normalize(L);
+	U = XMVector3Normalize(XMVector3Cross(L, R));
+	R = XMVector3Cross(U, L);
+	
+	XMStoreFloat3(&mRight, R);
+	XMStoreFloat3(&mUp, U);
+	XMStoreFloat3(&mLook, L);
+
+	float x = -XMVectorGetX(XMVector3Dot(P, R));
+	float y = -XMVectorGetY(XMVector3Dot(P, U));
+	float z = -XMVectorGetZ(XMVector3Dot(P, L));
+
+	mView(0, 0) = mRight.x;
+	mView(1, 0) = mRight.y;
+	mView(2, 0) = mRight.z;
+	mView(3, 0) = x;
+
+	mView(0, 1) = mUp.x;
+	mView(1, 1) = mUp.y;
+	mView(2, 1) = mUp.z;
+	mView(3, 1) = y;
+
+	mView(0, 2) = mLook.x;
+	mView(1, 2) = mLook.y;
+	mView(2, 2) = mLook.z;
+	mView(3, 2) = z;
+
+	mView(0, 3) = 0.0f;
+	mView(1, 3) = 0.0f;
+	mView(2, 3) = 0.0f;
+	mView(3, 3) = 1.0f;
+}
+
+void CameraObject::walk(float delta)
+{
+	// mPosition += delta*mLook
+	XMVECTOR d = XMVectorReplicate(delta);
+	XMVECTOR l = XMLoadFloat3(&mLook);
+	XMVECTOR p = XMLoadFloat3(&mPosition);
+	XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(d, l, p));
+}
+
+void CameraObject::strafe(float delta)
+{
+	// mPosition += delta*mRight
+	XMVECTOR d = XMVectorReplicate(delta);
+	XMVECTOR r = XMLoadFloat3(&mRight);
+	XMVECTOR p = XMLoadFloat3(&mPosition);
+	XMStoreFloat3(&mPosition, XMVectorMultiplyAdd(d, r, p));
+}
+
+void CameraObject::pitch(float angle)
+{
+	// rotate up and look vector about the right vector
+
+	XMMATRIX R = XMMatrixRotationAxis(XMLoadFloat3(&mRight), angle);
+
+	XMStoreFloat3(&mUp, XMVector3TransformNormal(XMLoadFloat3(&mUp), R));
+	XMStoreFloat3(&mLook, XMVector3TransformNormal(XMLoadFloat3(&mLook), R));
+}
+
+void CameraObject::rotate(float angle)
+{
+	// rotate the basis vectors about the world y-axis
+
+	XMMATRIX R = XMMatrixRotationY(angle);
+
+	XMStoreFloat3(&mRight, XMVector3TransformNormal(XMLoadFloat3(&mRight), R));
+	XMStoreFloat3(&mUp, XMVector3TransformNormal(XMLoadFloat3(&mUp), R));
+	XMStoreFloat3(&mLook, XMVector3TransformNormal(XMLoadFloat3(&mLook), R));
+}
