@@ -13,9 +13,10 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <glfw3native.h>
 
-#include <D3d11.h>
-#include <directxmath.h>
+#include <d3d11.h>
+#include <DirectXMath.h>
 #include <DirectXColors.h>
+#include <DirectXCollision.h>
 using namespace DirectX;
 
 #include <wrl/client.h>
@@ -90,6 +91,8 @@ public:
 	float mFovAngleY;
 	float mNearWindowHeight;
 	float mFarWindowHeight;
+
+	BoundingFrustum mFrustum;
 
 	// view/proj
 	// XMMATRIX mView;
@@ -301,6 +304,8 @@ public:
 	Microsoft::WRL::ComPtr<ID3D11BlendState> mBlendState;
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mDepthStencilState;
 	UINT mStencilRef;
+
+	BoundingBox mAABB;
 
 	GameObject() :
 		mVertexBuffer(nullptr),
