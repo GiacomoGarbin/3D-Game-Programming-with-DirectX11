@@ -864,7 +864,7 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 
 	std::ifstream ifs;
 
-	ifs.open("C:/Users/D3PO/source/repos/DirectX11Tutorial/models/" + name);
+	ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
 
 	std::string line;
 
@@ -1310,9 +1310,7 @@ CameraObject::CameraObject() :
 	mRight(1, 0, 0),
 	mUp(0, 1, 0),
 	mLook(0, 0, 1)
-{
-
-}
+{}
 
 void CameraObject::SetFrustum(float FovAngleY, float AspectRatio, float NearZ, float FarZ)
 {

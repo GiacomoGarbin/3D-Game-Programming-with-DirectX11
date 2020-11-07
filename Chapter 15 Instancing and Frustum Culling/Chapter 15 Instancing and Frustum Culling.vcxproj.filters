@@ -28,22 +28,10 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="BezierDS.hlsl">
+    <FxCompile Include="PS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
-    <FxCompile Include="BezierHS.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="QuadDS.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="QuadHS.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="QuadPS.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="QuadVS.hlsl">
+    <FxCompile Include="VS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
   </ItemGroup>

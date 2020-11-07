@@ -305,11 +305,22 @@ public:
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mDepthStencilState;
 	UINT mStencilRef;
 
+	struct InstancedData
+	{
+		XMFLOAT4X4 mWorld;
+		XMFLOAT4   mColor;
+	};
+
+	ID3D11Buffer* mInstancedBuffer;
+	std::vector<InstancedData> mInstances;
+	
 	BoundingBox mAABB;
+	UINT mVisibleInstanceCount;
 
 	GameObject() :
 		mVertexBuffer(nullptr),
 		mIndexBuffer(nullptr),
+		mInstancedBuffer(nullptr),
 		mVertexStart(0),
 		mIndexStart(0),
 		mIndexCount(0),
@@ -333,6 +344,7 @@ public:
 	{
 		SafeRelease((*mVertexBuffer.GetAddressOf()));
 		SafeRelease((*mIndexBuffer.GetAddressOf()));
+		SafeRelease(mInstancedBuffer);
 		SafeRelease((*mSRV.GetAddressOf()));
 		SafeRelease((*mVertexShader.GetAddressOf()));
 		SafeRelease((*mGeometryShader.GetAddressOf()));
