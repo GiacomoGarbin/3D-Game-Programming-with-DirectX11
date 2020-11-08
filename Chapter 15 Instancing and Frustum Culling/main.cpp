@@ -340,9 +340,19 @@ void TestApp::UpdateScene(float dt)
 		mCamera.strafe(+10 * dt);
 	}
 
+	static bool IsPressed = false;
+
 	if (IsKeyPressed(GLFW_KEY_1))
 	{
-		mFrustumCullingEnabled = !mFrustumCullingEnabled;
+		if (!IsPressed)
+		{
+			IsPressed = true;
+			mFrustumCullingEnabled = !mFrustumCullingEnabled;
+		}
+	}
+	else
+	{
+		IsPressed = false;
 	}
 
 	// frustum culling
@@ -353,7 +363,36 @@ void TestApp::UpdateScene(float dt)
 
 	if (mFrustumCullingEnabled)
 	{
+		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
+		XMMATRIX InverseView = XMMatrixInverse(&XMMatrixDeterminant(V), V);
 
+		D3D11_MAPPED_SUBRESOURCE MappedData;
+
+		HR(mContext->Map(mSkull.mInstancedBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedData));
+
+		GameObject::InstancedData* instance = reinterpret_cast<GameObject::InstancedData*>(MappedData.pData);
+
+		for (std::size_t i = 0; i < mSkull.mInstances.size(); i++)
+		{
+			XMMATRIX W = XMLoadFloat4x4(&mSkull.mInstances.at(i).mWorld);
+			XMMATRIX InverseWorld = XMMatrixInverse(&XMMatrixDeterminant(W), W);
+
+			XMMATRIX ToLocal = InverseView * InverseWorld;
+
+			XMVECTOR S, R, T; // scale, rotate (quaternion), translate
+			XMMatrixDecompose(&S, &R, &T, ToLocal);
+
+			BoundingFrustum FrustumLocal;
+			// mCamera.mFrustum.Transform(FrustumLocal, ToLocal);
+			mCamera.mFrustum.Transform(FrustumLocal, XMVectorGetX(S), R, T);
+
+			if (FrustumLocal.Contains(mSkull.mMesh.mAABB) != DISJOINT)
+			{
+				instance[mSkull.mVisibleInstanceCount++] = mSkull.mInstances[i];
+			}
+		}
+
+		mContext->Unmap(mSkull.mInstancedBuffer, 0);
 	}
 	else
 	{

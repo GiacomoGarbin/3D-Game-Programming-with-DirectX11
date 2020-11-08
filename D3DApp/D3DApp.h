@@ -204,6 +204,8 @@ public:
 		std::vector<Vertex> mVertices;
 		std::vector<UINT> mIndices;
 
+		BoundingBox mAABB;
+
 		void ComputeNormals() { ComputeNormals(mVertices, mIndices); };
 		static void ComputeNormals(
 			std::vector<Vertex>& vertices,
@@ -314,7 +316,6 @@ public:
 	ID3D11Buffer* mInstancedBuffer;
 	std::vector<InstancedData> mInstances;
 	
-	BoundingBox mAABB;
 	UINT mVisibleInstanceCount;
 
 	GameObject() :

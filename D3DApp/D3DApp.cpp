@@ -871,6 +871,11 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 	bool vertices = false;
 	bool indices = false;
 
+	XMFLOAT3 minima = XMFLOAT3(FLT_MAX, FLT_MAX, FLT_MAX);
+	XMFLOAT3 maxima = XMFLOAT3(FLT_MIN, FLT_MIN, FLT_MIN);
+	XMVECTOR min = XMLoadFloat3(&minima);
+	XMVECTOR max = XMLoadFloat3(&maxima);
+
 	while (std::getline(ifs, line))
 	{
 		if (vertices)
@@ -884,6 +889,10 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 			vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
 
 			mesh.mVertices.push_back(vertex);
+
+			XMVECTOR P = XMLoadFloat3(&vertex.mPosition);
+			min = XMVectorMin(min, P);
+			max = XMVectorMax(max, P);
 		}
 
 		if (indices)
@@ -906,6 +915,9 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 	}
 
 	ifs.close();
+
+	XMStoreFloat3(&mesh.mAABB.Center,  (min + max) * 0.5f);
+	XMStoreFloat3(&mesh.mAABB.Extents, (max - min) * 0.5f);
 
 	// mesh.ComputeNormals();
 }
@@ -1320,6 +1332,7 @@ void CameraObject::SetFrustum(float FovAngleY, float AspectRatio, float NearZ, f
 	mFarZ = FarZ;
 
 	mProj = XMMatrixPerspectiveFovLH(mFovAngleY, mAspectRatio, mNearZ, mFarZ);
+	BoundingFrustum::CreateFromMatrix(mFrustum, mProj);
 }
 
 void CameraObject::UpdateView()
