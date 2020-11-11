@@ -46,7 +46,7 @@ cbuffer cbPerObject : register(b0)
 {
 	float4x4 gWorld;
 	float4x4 gWorldInverseTranspose;
-	float4x4 gViewProj;
+	float4x4 gWorldViewProj;
 	Material gMaterial;
 	float4x4 gTexTransform;
 };
@@ -75,9 +75,6 @@ struct VertexIn
 	float3 PositionL : POSITION;
 	float3 NormalL   : NORMAL;
 	float2 TexCoord  : TEXCOORD;
-	float4x4 world   : WORLD;
-	float4 color     : COLOR;
-	uint InstanceID  : SV_InstanceID;
 };
 
 struct VertexOut
@@ -86,24 +83,16 @@ struct VertexOut
 	float4 PositionH : SV_POSITION;
 	float3 NormalW   : NORMAL;
 	float2 TexCoord  : TEXCOORD;
-	float4 color     : COLOR;
 };
 
 VertexOut main(VertexIn vin)
 {
 	VertexOut vout;
 
-	vout.PositionW = mul(vin.world, float4(vin.PositionL, 1)).xyz;
-
-	//vout.PositionW.x = vin.PositionL.x + vin.world._41;
-	//vout.PositionW.y = vin.PositionL.y + vin.world._42;
-	//vout.PositionW.z = vin.PositionL.z + vin.world._43;
-
-	vout.PositionH = mul(gViewProj, float4(vout.PositionW, 1));
-	vout.NormalW = mul((float3x3)vin.world, vin.NormalL);
+	vout.PositionW = mul(gWorld, float4(vin.PositionL, 1)).xyz;
+	vout.PositionH = mul(gWorldViewProj, float4(vout.PositionW, 1));
+	vout.NormalW = mul((float3x3)gWorldInverseTranspose, vin.NormalL);
 	vout.TexCoord = mul(gTexTransform, float4(vin.TexCoord, 0, 1)).xy;
-	vout.color = vin.color;
-	//vout.color = float4(vin.world._41, vin.world._42, vin.world._43, 1);
 
 	return vout;
 }

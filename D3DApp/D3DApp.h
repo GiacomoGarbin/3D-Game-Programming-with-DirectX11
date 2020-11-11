@@ -150,6 +150,10 @@ protected:
 	ID3D11RenderTargetView* mRenderTargetView;
 	ID3D11DepthStencilView* mDepthStencilView;
 	D3D11_VIEWPORT mViewport;
+	// rasterizer states
+	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mWireframeRS;
+	// depth stencil states
+	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mLessEqualDSS;
 
 	// window stuff
 	GLFWwindow* mMainWindow;
@@ -225,6 +229,7 @@ public:
 
 	static void CreateModel(std::string name, Mesh& mesh);
 	static void CreateSkull(Mesh& mesh) { CreateModel("skull.txt", mesh); };
+	static void CreateCar(Mesh& mesh) { CreateModel("car.txt", mesh); };
 
 	static void CreateScreenQuad(Mesh& mesh);
 

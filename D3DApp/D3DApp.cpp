@@ -127,6 +127,10 @@ D3DApp::~D3DApp()
 	SafeRelease(mContext);
 	SafeRelease(mDevice);
 
+	SafeRelease((*mWireframeRS.GetAddressOf()));
+	
+	SafeRelease((*mLessEqualDSS.GetAddressOf()));
+
 	glfwDestroyWindow(mMainWindow);
 	glfwTerminate();
 }
@@ -297,6 +301,48 @@ bool D3DApp::InitDirect3D()
 	SafeRelease(factory);
 
 	OnResize(mMainWindow, mMainWindowWidth, mMainWindowHeight);
+
+	// rasterizer states
+
+	// wireframe
+	{
+		D3D11_RASTERIZER_DESC desc;
+		desc.FillMode = D3D11_FILL_WIREFRAME;
+		desc.CullMode = D3D11_CULL_NONE;
+		desc.FrontCounterClockwise = false;
+		desc.DepthBias = 0;
+		desc.DepthBiasClamp = 0;
+		desc.SlopeScaledDepthBias = 0;
+		desc.DepthClipEnable = true;
+		desc.ScissorEnable = false;
+		desc.MultisampleEnable = false;
+		desc.AntialiasedLineEnable = false;
+
+		HR(mDevice->CreateRasterizerState(&desc, &mWireframeRS));
+	}
+
+	// depth stencil states
+
+	// less equal
+	{
+		D3D11_DEPTH_STENCIL_DESC desc;
+		desc.DepthEnable = true;
+		desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		desc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+		desc.StencilEnable = false;
+		//desc.StencilReadMask = 0xff;
+		//desc.StencilWriteMask = 0xff;
+		//desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		//desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		//desc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		//desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+		HR(mDevice->CreateDepthStencilState(&desc, &mLessEqualDSS));
+	}
 
 	return true;
 }

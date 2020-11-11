@@ -39,20 +39,22 @@ public:
 	{
 		XMFLOAT4X4 mWorld;
 		XMFLOAT4X4 mWorldInverseTranspose;
-		XMFLOAT4X4 mViewProj;
+		XMFLOAT4X4 mWorldViewProj;
 		GameObject::Material mMaterial;
 		XMFLOAT4X4 mTexTransform;
 	};
 
 	ID3D11Buffer* mPerObjectCB;
 
-	GameObject mSkull;
-	//XMMATRIX mWorld;
-
-	//UINT mVisibleObjectCount;
-	bool mFrustumCullingEnabled;
-
+	//GameObject mSkull;
+	GameObject mCar;
+	
 	std::array<LightDirectional, 3> mLights;
+
+	UINT mPickedTriangle;
+	GameObject::Material mPickedMaterial;
+
+	void OnMouseButton(GLFWwindow* window, int button, int action, int mods) override;
 };
 
 TestApp::TestApp() :
@@ -60,11 +62,9 @@ TestApp::TestApp() :
 	mPerFrameCB(nullptr),
 	mPerObjectCB(nullptr)
 {
-	mMainWindowTitle = "Ch15 Instancing and Frustum Culling";
+	mMainWindowTitle = "Ch16 Picking";
 
 	//m4xMSAAEnabled = true;
-
-	//mWorld = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0, 1, 0);
 
 	mLights[0].mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
 	mLights[0].mDiffuse = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
@@ -82,6 +82,12 @@ TestApp::TestApp() :
 	mLights[2].mDirection = XMFLOAT3(0.0f, -0.707f, -0.707f);
 
 	mCamera.mPosition = XMFLOAT3(0.0f, 2.0f, -15.0f);
+
+	mPickedTriangle = -1;
+
+	mPickedMaterial.mAmbient = XMFLOAT4(0.0f, 0.8f, 0.4f, 1.0f);
+	mPickedMaterial.mDiffuse = XMFLOAT4(0.0f, 0.8f, 0.4f, 1.0f);
+	mPickedMaterial.mSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 16.0f);
 }
 
 TestApp::~TestApp()
@@ -98,7 +104,7 @@ bool TestApp::Init()
 	}
 
 	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/";
-	std::wstring proj = L"Chapter 15 Instancing and Frustum Culling/";
+	std::wstring proj = L"Chapter 16 Picking/";
 
 	// VS
 	{
@@ -109,7 +115,7 @@ bool TestApp::Init()
 		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
 		HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-		mSkull.mVertexShader = shader;
+		mCar.mVertexShader = shader;
 
 		// input layout
 		{
@@ -118,18 +124,13 @@ bool TestApp::Init()
 				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0},
 				{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA,   0},
 				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 40, D3D11_INPUT_PER_VERTEX_DATA,   0},
-				{"WORLD",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1,  0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{"WORLD",    1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 16, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{"WORLD",    2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 32, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{"WORLD",    3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 48, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{"COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 64, D3D11_INPUT_PER_INSTANCE_DATA, 1},
 			};
 
 			Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
 
 			HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
 
-			mSkull.mInputLayout = layout;
+			mCar.mInputLayout = layout;
 		}
 	}
 
@@ -149,7 +150,7 @@ bool TestApp::Init()
 		HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
 		HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-		mSkull.mPixelShader = shader;
+		mCar.mPixelShader = shader;
 	} // PS
 
 	// build per frame costant buffer
@@ -205,22 +206,22 @@ bool TestApp::Init()
 		UpdateBuffer(buffer, obj.mIndexStart, obj.mMesh.mIndices.size(), sizeof(UINT), obj.mMesh.mIndices.data());
 	};
 
-	// build skull geometry
+	// build car geometry
 	{
-		GeometryGenerator::CreateModel("skull.txt", mSkull.mMesh);
+		GeometryGenerator::CreateCar(mCar.mMesh);
 
-		mSkull.mVertexStart = 0;
+		mCar.mVertexStart = 0;
 
-		mSkull.mWorld = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0, 1, 0);
+		mCar.mWorld = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0, 1, 0);
 
-		mSkull.mMaterial.mAmbient = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
-		mSkull.mMaterial.mDiffuse = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-		mSkull.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mCar.mMaterial.mAmbient = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
+		mCar.mMaterial.mDiffuse = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
+		mCar.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
 
 		// VB
 		{
 			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mSkull.mMesh.mVertices.size();
+			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mCar.mMesh.mVertices.size();
 			desc.Usage = D3D11_USAGE_DEFAULT;
 			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 			desc.CPUAccessFlags = 0;
@@ -230,15 +231,15 @@ bool TestApp::Init()
 			Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
 			HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
 
-			UpdateVertexBuffer(buffer, mSkull);
+			UpdateVertexBuffer(buffer, mCar);
 
-			mSkull.mVertexBuffer = buffer;
+			mCar.mVertexBuffer = buffer;
 		}
 
 		// IB
 		{
 			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(UINT) * (mSkull.mMesh.mIndices.size() + mSkull.mMesh.mIndices.size());
+			desc.ByteWidth = sizeof(UINT) * (mCar.mMesh.mIndices.size() + mCar.mMesh.mIndices.size());
 			desc.Usage = D3D11_USAGE_DEFAULT;
 			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 			desc.CPUAccessFlags = 0;
@@ -248,64 +249,10 @@ bool TestApp::Init()
 			Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
 			HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
 
-			UpdateIndexBuffer(buffer, mSkull);
+			UpdateIndexBuffer(buffer, mCar);
 
-			mSkull.mIndexBuffer = buffer;
+			mCar.mIndexBuffer = buffer;
 		}
-	}
-
-	// build instanced buffer
-	{
-		UINT rows = 5;
-		UINT cols = 5;
-		UINT cuts = 5;
-
-		float width = 200;
-		float height = 200;
-		float depth = 200;
-
-		float x = -0.5f * width;
-		float y = -0.5f * height;
-		float z = -0.5f * depth;
-
-		float dx = width / (cols - 1);
-		float dy = height / (rows - 1);
-		float dz = width / (cuts - 1);
-
-		mSkull.mInstances.resize(rows * cols * cuts);
-
-		for (UINT row = 0; row < rows; ++row)
-		{
-			for (UINT col = 0; col < cols; ++col)
-			{
-				for (UINT cut = 0; cut < cuts; ++cut)
-				{
-					mSkull.mInstances.at(cut * cols * rows + row * cols + col).mWorld = XMFLOAT4X4
-					(
-						1, 0, 0, 0,
-						0, 1, 0, 0,
-						0, 0, 1, 0,
-						x + dx * col, y + dy * row, z + dz * cut, 1
-					);
-
-					mSkull.mInstances.at(cut * cols * rows + row * cols + col).mColor.x = GameMath::RandNorm();
-					mSkull.mInstances.at(cut * cols * rows + row * cols + col).mColor.y = GameMath::RandNorm();
-					mSkull.mInstances.at(cut * cols * rows + row * cols + col).mColor.z = GameMath::RandNorm();
-					mSkull.mInstances.at(cut * cols * rows + row * cols + col).mColor.w = 1;
-				}
-			}
-		}
-
-
-		D3D11_BUFFER_DESC desc;
-		desc.ByteWidth = sizeof(GameObject::InstancedData) * mSkull.mInstances.size();
-		desc.Usage = D3D11_USAGE_DYNAMIC;
-		desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-		desc.MiscFlags = 0;
-		desc.StructureByteStride = 0;
-
-		HR(mDevice->CreateBuffer(&desc, nullptr, &mSkull.mInstancedBuffer));
 	}
 
 	return true;
@@ -314,8 +261,68 @@ bool TestApp::Init()
 void TestApp::OnResize(GLFWwindow* window, int width, int height)
 {
 	D3DApp::OnResize(window, width, height);
+}
 
-	// ComputeFrustumFromProjection ?
+void TestApp::OnMouseButton(GLFWwindow* window, int button, int action, int mods)
+{
+	D3DApp::OnMouseButton(window, button, action, mods);
+
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+	{
+		double sx, sy;
+		glfwGetCursorPos(window, &sx, &sy);
+
+		XMFLOAT4X4 P;
+		XMStoreFloat4x4(&P, mCamera.mProj);
+
+		float vx = (+2*sx/mMainWindowWidth  - 1) / P(0,0);
+		float vy = (-2*sy/mMainWindowHeight + 1) / P(1,1);
+
+		XMVECTOR RayOri = XMVectorSet(0, 0, 0, 1);
+		XMVECTOR RayDir = XMVectorSet(vx, vy, 1, 0);
+
+		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
+		XMMATRIX InverseView = XMMatrixInverse(&XMMatrixDeterminant(V), V);
+
+		XMMATRIX InverseWorld = XMMatrixInverse(&XMMatrixDeterminant(mCar.mWorld), mCar.mWorld);
+
+		XMMATRIX ToLocal = InverseView * InverseWorld;
+
+		RayOri = XMVector3TransformCoord(RayOri, ToLocal);
+		RayDir = XMVector3TransformNormal(RayDir, ToLocal);
+		RayDir = XMVector3Normalize(RayDir);
+
+		mPickedTriangle = -1;
+		float T = 0;
+
+		if (mCar.mMesh.mAABB.Intersects(RayOri, RayDir, T))
+		{
+			T = FLT_MAX;
+
+			for (UINT i = 0; i < mCar.mMesh.mIndices.size(); i += 3)
+			{
+				UINT i0 = mCar.mMesh.mIndices.at(i + 0);
+				UINT i1 = mCar.mMesh.mIndices.at(i + 1);
+				UINT i2 = mCar.mMesh.mIndices.at(i + 2);
+
+				XMVECTOR v0 = XMLoadFloat3(&mCar.mMesh.mVertices.at(i0).mPosition);
+				XMVECTOR v1 = XMLoadFloat3(&mCar.mMesh.mVertices.at(i1).mPosition);
+				XMVECTOR v2 = XMLoadFloat3(&mCar.mMesh.mVertices.at(i2).mPosition);
+
+				float t = 0;
+
+				if (TriangleTests::Intersects(RayOri, RayDir, v0, v1, v2, t))
+				{
+					if (t < T)
+					{
+						T = t;
+						mPickedTriangle = i;
+					}
+				}
+
+			} // for each triangle
+		}
+	}
 }
 
 void TestApp::UpdateScene(float dt)
@@ -340,78 +347,7 @@ void TestApp::UpdateScene(float dt)
 		mCamera.strafe(+10 * dt);
 	}
 
-	static bool IsPressed = false;
-
-	if (IsKeyPressed(GLFW_KEY_1))
-	{
-		if (!IsPressed)
-		{
-			IsPressed = true;
-			mFrustumCullingEnabled = !mFrustumCullingEnabled;
-		}
-	}
-	else
-	{
-		IsPressed = false;
-	}
-
-	// frustum culling
-
 	mCamera.UpdateView();
-
-	mSkull.mVisibleInstanceCount = 0;
-
-	if (mFrustumCullingEnabled)
-	{
-		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-		XMMATRIX InverseView = XMMatrixInverse(&XMMatrixDeterminant(V), V);
-
-		D3D11_MAPPED_SUBRESOURCE MappedData;
-
-		HR(mContext->Map(mSkull.mInstancedBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedData));
-
-		GameObject::InstancedData* instance = reinterpret_cast<GameObject::InstancedData*>(MappedData.pData);
-
-		for (std::size_t i = 0; i < mSkull.mInstances.size(); i++)
-		{
-			XMMATRIX W = XMLoadFloat4x4(&mSkull.mInstances.at(i).mWorld);
-			XMMATRIX InverseWorld = XMMatrixInverse(&XMMatrixDeterminant(W), W);
-
-			XMMATRIX ToLocal = InverseView * InverseWorld;
-
-			XMVECTOR S, R, T; // scale, rotate (quaternion), translate
-			XMMatrixDecompose(&S, &R, &T, ToLocal);
-
-			BoundingFrustum FrustumLocal;
-			// mCamera.mFrustum.Transform(FrustumLocal, ToLocal);
-			mCamera.mFrustum.Transform(FrustumLocal, XMVectorGetX(S), R, T);
-
-			if (FrustumLocal.Contains(mSkull.mMesh.mAABB) != DISJOINT)
-			{
-				instance[mSkull.mVisibleInstanceCount++] = mSkull.mInstances[i];
-			}
-		}
-
-		mContext->Unmap(mSkull.mInstancedBuffer, 0);
-	}
-	else
-	{
-		D3D11_MAPPED_SUBRESOURCE MappedData;
-
-		HR(mContext->Map(mSkull.mInstancedBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedData));
-
-		GameObject::InstancedData* instance = reinterpret_cast<GameObject::InstancedData*>(MappedData.pData);
-
-		for (std::size_t i = 0; i < mSkull.mInstances.size(); i++)
-		{
-			instance[i] = mSkull.mInstances[i];
-			mSkull.mVisibleInstanceCount++;
-		}
-
-		mContext->Unmap(mSkull.mInstancedBuffer, 0);
-	}
-
-	mMainWindowTitle = "Ch15 Instancing and Frustum Culling | Visible Objects " + std::to_string(mSkull.mVisibleInstanceCount) + "/" + std::to_string(mSkull.mInstances.size());
 }
 
 void TestApp::DrawScene()
@@ -443,7 +379,7 @@ void TestApp::DrawScene()
 		XMStoreFloat4x4(&buffer.mWorld, obj->mWorld);
 		XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(obj->mWorld));
 		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-		XMStoreFloat4x4(&buffer.mViewProj, V * mCamera.mProj);
+		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * mCamera.mProj);
 		buffer.mMaterial = obj->mMaterial;
 		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
 
@@ -500,7 +436,16 @@ void TestApp::DrawScene()
 		}
 
 		// rasterizer, blend and depth-stencil states
-		mContext->RSSetState(obj->mRasterizerState.Get());
+
+		if (IsKeyPressed(GLFW_KEY_1))
+		{
+			mContext->RSSetState(mWireframeRS.Get());
+		}
+		else
+		{
+			mContext->RSSetState(obj->mRasterizerState.Get());
+		}
+
 		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
 		mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
 
@@ -528,7 +473,32 @@ void TestApp::DrawScene()
 
 	SetPerFrameCB();
 
-	DrawGameObject(&mSkull);
+	DrawGameObject(&mCar);
+
+	if (mPickedTriangle != -1)
+	{
+		mContext->RSSetState(nullptr);
+		mContext->OMSetDepthStencilState(mLessEqualDSS.Get(), 0);
+
+		{
+			PerObjectCB buffer;
+			XMStoreFloat4x4(&buffer.mWorld, mCar.mWorld);
+			XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(mCar.mWorld));
+			XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
+			XMStoreFloat4x4(&buffer.mWorldViewProj, mCar.mWorld * V * mCamera.mProj);
+			buffer.mMaterial = mPickedMaterial;
+			XMStoreFloat4x4(&buffer.mTexTransform, mCar.mTexTransform);
+
+			mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
+
+			mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
+			mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
+		}
+
+		mContext->DrawIndexed(3, mPickedTriangle, mCar.mVertexStart);
+
+		mContext->OMSetDepthStencilState(nullptr, 0);
+	}
 
 	mSwapChain->Present(0, 0);
 }

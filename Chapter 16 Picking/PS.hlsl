@@ -73,7 +73,6 @@ struct VertexOut
 	float4 PositionH : SV_POSITION;
 	float3 NormalW   : NORMAL;
 	float2 TexCoord  : TEXCOORD;
-	float4 color     : COLOR;
 };
 
 void ComputeLightDirectional(
@@ -231,8 +230,8 @@ float4 main(VertexOut pin) : SV_TARGET
 			float4 a, d, s;
 
 			ComputeLightDirectional(gMaterial, gLights[i], pin.NormalW, E, a, d, s);
-			ambient  += a * pin.color;
-			diffuse  += d * pin.color;
+			ambient  += a;
+			diffuse  += d;
 			specular += s;
 		}
 
