@@ -239,7 +239,7 @@ bool TestApp::Init()
 		// IB
 		{
 			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(UINT) * (mCar.mMesh.mIndices.size() + mCar.mMesh.mIndices.size());
+			desc.ByteWidth = sizeof(UINT) * mCar.mMesh.mIndices.size();
 			desc.Usage = D3D11_USAGE_DEFAULT;
 			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 			desc.CPUAccessFlags = 0;
