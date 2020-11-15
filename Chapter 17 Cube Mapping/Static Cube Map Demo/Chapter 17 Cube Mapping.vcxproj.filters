@@ -18,14 +18,9 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\D3DApp\D3DApp.cpp">
+    <ClCompile Include="..\..\D3DApp\D3DApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\D3DApp\D3DApp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PS.hlsl">
@@ -40,5 +35,10 @@
     <FxCompile Include="SkyVS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\D3DApp\D3DApp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

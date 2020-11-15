@@ -167,11 +167,8 @@
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\D3DApp\D3DApp.cpp" />
+    <ClCompile Include="..\..\D3DApp\D3DApp.cpp" />
     <ClCompile Include="main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\D3DApp\D3DApp.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PS.hlsl">
@@ -200,7 +197,10 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\DirectXTK-jul2020\DirectXTK_Desktop_2019_Win10.vcxproj">
+    <ClInclude Include="..\..\D3DApp\D3DApp.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\DirectXTK-jul2020\DirectXTK_Desktop_2019_Win10.vcxproj">
       <Project>{e0b52ae7-e160-4d32-bf3f-910b785e5a8e}</Project>
     </ProjectReference>
   </ItemGroup>

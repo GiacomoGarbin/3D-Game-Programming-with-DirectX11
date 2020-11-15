@@ -99,7 +99,7 @@ bool TestApp::Init()
 	}
 
 	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/";
-	std::wstring proj = L"Chapter 17 Cube Mapping/";
+	std::wstring proj = L"Chapter 17 Cube Mapping/Static Cube Map Demo/";
 
 	// VS
 	{
