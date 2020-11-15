@@ -19,6 +19,8 @@
 #include <DirectXCollision.h>
 using namespace DirectX;
 
+#include <DDSTextureLoader.h>
+
 #include <wrl/client.h>
 //using namespace Microsoft::WRL;
 
@@ -131,6 +133,8 @@ public:
 
 	float AspectRatio() const;
 
+	void CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view);
+
 protected:
 	bool InitMainWindow();
 	bool InitDirect3D();
@@ -152,6 +156,7 @@ protected:
 	D3D11_VIEWPORT mViewport;
 	// rasterizer states
 	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mWireframeRS;
+	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mNoCullRS;
 	// depth stencil states
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mLessEqualDSS;
 

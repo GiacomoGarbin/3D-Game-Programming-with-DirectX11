@@ -65,6 +65,7 @@ cbuffer cbPerFrame : register(b1)
 };
 
 Texture2D gTexture : register(t0);
+TextureCube gCubeMap : register(t1);
 SamplerState gSamplerState;
 
 struct VertexOut
@@ -205,16 +206,14 @@ float4 main(VertexOut pin) : SV_TARGET
 
 	float4 TextureColor = float4(1, 1, 1, 1);
 
-#if USE_TEXTURE
-	{
-		TextureColor = gTexture.Sample(gSamplerState, pin.TexCoord);
+#if ENABLE_TEXTURE
+	TextureColor = gTexture.Sample(gSamplerState, pin.TexCoord);
 
-		// if alpha clipping
-		{
-			//clip(TextureColor.a - 0.1f);
-		}
+	// if alpha clipping
+	{
+		clip(TextureColor.a - 0.1f);
 	}
-#endif
+#endif // ENABLE_TEXTURE
 
 	float4 color = TextureColor;
 
@@ -236,13 +235,19 @@ float4 main(VertexOut pin) : SV_TARGET
 		}
 
 		color = TextureColor * (ambient + diffuse) + specular;
+
+#if ENABLE_REFLECTION
+		float3 ReflectVec = reflect(-E, pin.NormalW);
+		float4 ReflectCol = gCubeMap.Sample(gSamplerState, ReflectVec);
+		color += gMaterial.reflect * ReflectCol;
+#endif // ENABLE_REFLECTION
+
 	}
 
-	// if fog
-	{
-		float t = saturate((DistToEye - gFogStart) / gFogRange);
-		//color = lerp(color, gFogColor, t);
-	}
+#if ENABLE_FOG
+	float t = saturate((DistToEye - gFogStart) / gFogRange);
+	color = lerp(color, gFogColor, t);
+#endif // ENABLE_FOG
 
 	color.a = TextureColor.a * gMaterial.diffuse.a;
 

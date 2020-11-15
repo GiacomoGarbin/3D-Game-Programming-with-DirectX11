@@ -34,5 +34,11 @@
     <FxCompile Include="VS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="SkyPS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="SkyVS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

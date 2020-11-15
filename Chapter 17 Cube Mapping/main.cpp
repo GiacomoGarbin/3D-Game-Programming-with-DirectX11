@@ -7,8 +7,6 @@
 
 #include <d3dcompiler.h>
 
-#include <DDSTextureLoader.h>
-
 class TestApp : public D3DApp
 {
 public:
@@ -46,23 +44,25 @@ public:
 
 	ID3D11Buffer* mPerObjectCB;
 
-	//GameObject mSkull;
-	GameObject mCar;
+	GameObject mSkull;
+	GameObject mBox;
+	GameObject mGrid;
+	GameObject mSphere;
+	GameObject mCylinder;
+	GameObject mSky;
 
 	std::array<LightDirectional, 3> mLights;
 
-	UINT mPickedTriangle;
-	GameObject::Material mPickedMaterial;
-
-	void OnMouseButton(GLFWwindow* window, int button, int action, int mods) override;
+	ID3D11SamplerState* mSamplerState;
 };
 
 TestApp::TestApp() :
 	D3DApp(),
 	mPerFrameCB(nullptr),
-	mPerObjectCB(nullptr)
+	mPerObjectCB(nullptr),
+	mSamplerState(nullptr)
 {
-	mMainWindowTitle = "Ch16 Picking";
+	mMainWindowTitle = "Ch17 Cube Mapping";
 
 	//m4xMSAAEnabled = true;
 
@@ -82,18 +82,13 @@ TestApp::TestApp() :
 	mLights[2].mDirection = XMFLOAT3(0.0f, -0.707f, -0.707f);
 
 	mCamera.mPosition = XMFLOAT3(0.0f, 2.0f, -15.0f);
-
-	mPickedTriangle = -1;
-
-	mPickedMaterial.mAmbient = XMFLOAT4(0.0f, 0.8f, 0.4f, 1.0f);
-	mPickedMaterial.mDiffuse = XMFLOAT4(0.0f, 0.8f, 0.4f, 1.0f);
-	mPickedMaterial.mSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 16.0f);
 }
 
 TestApp::~TestApp()
 {
 	SafeRelease(mPerFrameCB);
 	SafeRelease(mPerObjectCB);
+	SafeRelease(mSamplerState);
 }
 
 bool TestApp::Init()
@@ -104,7 +99,7 @@ bool TestApp::Init()
 	}
 
 	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/";
-	std::wstring proj = L"Chapter 16 Picking/";
+	std::wstring proj = L"Chapter 17 Cube Mapping/";
 
 	// VS
 	{
@@ -115,7 +110,11 @@ bool TestApp::Init()
 		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
 		HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-		mCar.mVertexShader = shader;
+		mSkull.mVertexShader = shader;
+		mGrid.mVertexShader = shader;
+		mBox.mVertexShader = shader;
+		mCylinder.mVertexShader = shader;
+		mSphere.mVertexShader = shader;
 
 		// input layout
 		{
@@ -130,7 +129,11 @@ bool TestApp::Init()
 
 			HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
 
-			mCar.mInputLayout = layout;
+			mSkull.mInputLayout = layout;
+			mGrid.mInputLayout = layout;
+			mBox.mInputLayout = layout;
+			mCylinder.mInputLayout = layout;
+			mSphere.mInputLayout = layout;
 		}
 	}
 
@@ -140,18 +143,22 @@ bool TestApp::Init()
 		std::wstring path = base + proj + L"PS.hlsl";
 
 		std::vector<D3D_SHADER_MACRO> defines;
-		//defines.push_back({ "ENABLE_TEXTURE",        "1" });
+		defines.push_back({ "ENABLE_TEXTURE",        "1" });
 		//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 		//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-		//defines.push_back({ "ENABLE_FOG",            "1" });
+		defines.push_back({ "ENABLE_REFLECTION",     "1" });
+		defines.push_back({ "ENABLE_FOG",            "0" });
 		defines.push_back({ nullptr, nullptr });
 
 		ID3DBlob* pCode;
 		HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
 		HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
 
-		mCar.mPixelShader = shader;
-	} // PS
+		mGrid.mPixelShader = shader;
+		mBox.mPixelShader = shader;
+		mCylinder.mPixelShader = shader;
+		mSphere.mPixelShader = shader;
+	}
 
 	// build per frame costant buffer
 	{
@@ -206,53 +213,233 @@ bool TestApp::Init()
 		UpdateBuffer(buffer, obj.mIndexStart, obj.mMesh.mIndices.size(), sizeof(UINT), obj.mMesh.mIndices.data());
 	};
 
-	// build car geometry
+	// build skull geometry
 	{
-		GeometryGenerator::CreateCar(mCar.mMesh);
+		GeometryGenerator::CreateSkull(mSkull.mMesh);
 
-		mCar.mVertexStart = 0;
+		mSkull.mVertexStart = 0;
+		mSkull.mIndexStart = 0;
 
-		mCar.mWorld = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0, 1, 0);
+		mSkull.mWorld = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0, 1, 0);
 
-		mCar.mMaterial.mAmbient = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
-		mCar.mMaterial.mDiffuse = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-		mCar.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mSkull.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+		mSkull.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+		mSkull.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mSkull.mMaterial.mReflect = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
+
+		// PS
+		{
+			std::wstring path = base + proj + L"PS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			defines.push_back({ "ENABLE_TEXTURE",        "0" });
+			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
+			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
+			defines.push_back({ "ENABLE_REFLECTION",     "1" });
+			defines.push_back({ "ENABLE_FOG",            "0" });
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mSkull.mPixelShader));
+		}
+	}
+
+	// build grid geometry
+	{
+		GeometryGenerator::CreateGrid(20, 30, 60, 40, mGrid.mMesh);
+
+		mGrid.mVertexStart = mSkull.mVertexStart + mSkull.mMesh.mVertices.size();
+		mGrid.mIndexStart = mSkull.mIndexStart + mSkull.mMesh.mIndices.size();
+
+		mGrid.mWorld = XMMatrixIdentity();
+		mGrid.mTexTransform = XMMatrixScaling(6.0f, 8.0f, 1.0f);
+
+		mGrid.mMaterial.mAmbient = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
+		mGrid.mMaterial.mDiffuse = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
+		mGrid.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mGrid.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+
+		CreateSRV(L"floor.dds", &mGrid.mSRV);
+	}
+
+	// build box geometry
+	{
+		GeometryGenerator::CreateBox(1, 1, 1, mBox.mMesh);
+
+		mBox.mVertexStart = mGrid.mVertexStart + mGrid.mMesh.mVertices.size();
+		mBox.mIndexStart = mGrid.mIndexStart + mGrid.mMesh.mIndices.size();
+
+		mBox.mWorld = XMMatrixScaling(3.0f, 1.0f, 3.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f); // XMMatrixMultiply(boxScale, boxOffset));
+
+		mBox.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+		mBox.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+		mBox.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mBox.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+
+		CreateSRV(L"stone.dds", &mBox.mSRV);
+	}
+
+	// build cylinder geometry
+	{
+		GeometryGenerator::CreateCylinder(0.5f, 0.3f, 3, 20, 20, mCylinder.mMesh);
+
+		mCylinder.mVertexStart = mBox.mVertexStart + mBox.mMesh.mVertices.size();
+		mCylinder.mIndexStart = mBox.mIndexStart + mBox.mMesh.mIndices.size();
+
+		mCylinder.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+		mCylinder.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+		mCylinder.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mCylinder.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+
+		CreateSRV(L"bricks.dds", &mCylinder.mSRV);
+	}
+
+	// build sphere geometry
+	{
+		GeometryGenerator::CreateSphere(0.5f, 3, mSphere.mMesh);
+
+		mSphere.mVertexStart = mCylinder.mVertexStart + mCylinder.mMesh.mVertices.size();
+		mSphere.mIndexStart = mCylinder.mIndexStart + mCylinder.mMesh.mIndices.size();
+
+		mSphere.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
+		mSphere.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
+		mSphere.mMaterial.mSpecular = XMFLOAT4(0.9f, 0.9f, 0.9f, 16.0f);
+		mSphere.mMaterial.mReflect = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
+
+		mSphere.mSRV = mBox.mSRV;
+	}
+
+	// build sky geometry
+	{
+		GeometryGenerator::CreateSphere(5000, 3, mSky.mMesh);
+
+		mSky.mVertexStart = mSphere.mVertexStart + mSphere.mMesh.mVertices.size();
+		mSky.mIndexStart = mSphere.mIndexStart + mSphere.mMesh.mIndices.size();
+
+		mSky.mRasterizerState = mNoCullRS;
+		mSky.mDepthStencilState = mLessEqualDSS;
+
+		CreateSRV(L"grasscube1024.dds", &mSky.mSRV);
+
+		// VS
+		{
+			std::wstring path = base + proj + L"SkyVS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mSky.mVertexShader));
+
+			// input layout
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0},
+				};
+
+				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mSky.mInputLayout));
+			}
+		}
+
+		// PS
+		{
+			std::wstring path = base + proj + L"SkyPS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mSky.mPixelShader));
+		}
+	}
+
+	// create vertex and input buffers
+	{
+		std::array<GameObject*, 6> objects = { &mSkull, &mGrid, &mBox, &mCylinder, &mSphere, &mSky };
+
+		std::vector<GeometryGenerator::Vertex> vertices;
+		std::vector<UINT> indices;
+
+		auto AddVertex = [&vertices](const GameObject& obj) -> void
+		{
+			vertices.insert(vertices.end(), obj.mMesh.mVertices.begin(), obj.mMesh.mVertices.end());
+		};
+
+		auto AddIndex = [&indices](const GameObject& obj) -> void
+		{
+			indices.insert(indices.end(), obj.mMesh.mIndices.begin(), obj.mMesh.mIndices.end());
+		};
+
+		for (GameObject* obj : objects)
+		{
+			AddVertex(*obj);
+			AddIndex(*obj);
+		}
+
+		Microsoft::WRL::ComPtr<ID3D11Buffer> VB;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> IB;
 
 		// VB
 		{
 			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mCar.mMesh.mVertices.size();
-			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * vertices.size();
+			desc.Usage = D3D11_USAGE_IMMUTABLE;
 			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 			desc.CPUAccessFlags = 0;
 			desc.MiscFlags = 0;
 			desc.StructureByteStride = 0;
 
-			Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-			HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
+			D3D11_SUBRESOURCE_DATA InitData;
+			InitData.pSysMem = vertices.data();
+			InitData.SysMemPitch = 0;
+			InitData.SysMemSlicePitch = 0;
 
-			UpdateVertexBuffer(buffer, mCar);
-
-			mCar.mVertexBuffer = buffer;
+			HR(mDevice->CreateBuffer(&desc, &InitData, &VB));
 		}
 
 		// IB
 		{
 			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(UINT) * (mCar.mMesh.mIndices.size() + mCar.mMesh.mIndices.size());
-			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.ByteWidth = sizeof(UINT) * indices.size();
+			desc.Usage = D3D11_USAGE_IMMUTABLE;
 			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 			desc.CPUAccessFlags = 0;
 			desc.MiscFlags = 0;
 			desc.StructureByteStride = 0;
+			
+			D3D11_SUBRESOURCE_DATA InitData;
+			InitData.pSysMem = indices.data();
+			InitData.SysMemPitch = 0;
+			InitData.SysMemSlicePitch = 0;
 
-			Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-			HR(mDevice->CreateBuffer(&desc, nullptr, &buffer));
-
-			UpdateIndexBuffer(buffer, mCar);
-
-			mCar.mIndexBuffer = buffer;
+			HR(mDevice->CreateBuffer(&desc, &InitData, &IB));
 		}
+
+		for (GameObject* obj : objects)
+		{
+			obj->mVertexBuffer = VB;
+			obj->mIndexBuffer = IB;
+		}
+	}
+
+	// sampler state
+	{
+		D3D11_SAMPLER_DESC desc;
+		desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+		desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+		desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+		desc.MipLODBias = 0;
+		desc.MaxAnisotropy = 1;
+		desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+		ZeroMemory(desc.BorderColor, sizeof(desc.BorderColor));
+		desc.MinLOD = 0;
+		desc.MaxLOD = 0;
+
+		HR(mDevice->CreateSamplerState(&desc, &mSamplerState));
+
+		mContext->PSSetSamplers(0, 1, &mSamplerState);
 	}
 
 	return true;
@@ -261,68 +448,6 @@ bool TestApp::Init()
 void TestApp::OnResize(GLFWwindow* window, int width, int height)
 {
 	D3DApp::OnResize(window, width, height);
-}
-
-void TestApp::OnMouseButton(GLFWwindow* window, int button, int action, int mods)
-{
-	D3DApp::OnMouseButton(window, button, action, mods);
-
-	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
-	{
-		double sx, sy;
-		glfwGetCursorPos(window, &sx, &sy);
-
-		XMFLOAT4X4 P;
-		XMStoreFloat4x4(&P, mCamera.mProj);
-
-		float vx = (+2 * sx / mMainWindowWidth - 1) / P(0, 0);
-		float vy = (-2 * sy / mMainWindowHeight + 1) / P(1, 1);
-
-		XMVECTOR RayOri = XMVectorSet(0, 0, 0, 1);
-		XMVECTOR RayDir = XMVectorSet(vx, vy, 1, 0);
-
-		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-		XMMATRIX InverseView = XMMatrixInverse(&XMMatrixDeterminant(V), V);
-
-		XMMATRIX InverseWorld = XMMatrixInverse(&XMMatrixDeterminant(mCar.mWorld), mCar.mWorld);
-
-		XMMATRIX ToLocal = InverseView * InverseWorld;
-
-		RayOri = XMVector3TransformCoord(RayOri, ToLocal);
-		RayDir = XMVector3TransformNormal(RayDir, ToLocal);
-		RayDir = XMVector3Normalize(RayDir);
-
-		mPickedTriangle = -1;
-		float T = 0;
-
-		if (mCar.mMesh.mAABB.Intersects(RayOri, RayDir, T))
-		{
-			T = FLT_MAX;
-
-			for (UINT i = 0; i < mCar.mMesh.mIndices.size(); i += 3)
-			{
-				UINT i0 = mCar.mMesh.mIndices.at(i + 0);
-				UINT i1 = mCar.mMesh.mIndices.at(i + 1);
-				UINT i2 = mCar.mMesh.mIndices.at(i + 2);
-
-				XMVECTOR v0 = XMLoadFloat3(&mCar.mMesh.mVertices.at(i0).mPosition);
-				XMVECTOR v1 = XMLoadFloat3(&mCar.mMesh.mVertices.at(i1).mPosition);
-				XMVECTOR v2 = XMLoadFloat3(&mCar.mMesh.mVertices.at(i2).mPosition);
-
-				float t = 0;
-
-				if (TriangleTests::Intersects(RayOri, RayDir, v0, v1, v2, t))
-				{
-					if (t < T)
-					{
-						T = t;
-						mPickedTriangle = i;
-					}
-				}
-
-			} // for each triangle
-		}
-	}
 }
 
 void TestApp::UpdateScene(float dt)
@@ -473,32 +598,41 @@ void TestApp::DrawScene()
 
 	SetPerFrameCB();
 
-	DrawGameObject(&mCar);
+	// draw without reflection
 
-	if (mPickedTriangle != -1)
+	DrawGameObject(&mGrid);
+	DrawGameObject(&mBox);
+
+	for (UINT i = 0; i < 5; ++i)
 	{
-		mContext->RSSetState(nullptr);
-		mContext->OMSetDepthStencilState(mLessEqualDSS.Get(), 0);
-
-		{
-			PerObjectCB buffer;
-			XMStoreFloat4x4(&buffer.mWorld, mCar.mWorld);
-			XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(mCar.mWorld));
-			XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-			XMStoreFloat4x4(&buffer.mWorldViewProj, mCar.mWorld * V * mCamera.mProj);
-			buffer.mMaterial = mPickedMaterial;
-			XMStoreFloat4x4(&buffer.mTexTransform, mCar.mTexTransform);
-
-			mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
-
-			mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
-			mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
-		}
-
-		mContext->DrawIndexed(3, mPickedTriangle, mCar.mVertexStart);
-
-		mContext->OMSetDepthStencilState(nullptr, 0);
+		mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
+		DrawGameObject(&mCylinder);
+		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
+		DrawGameObject(&mCylinder);
 	}
+
+	// draw with reflection
+
+	// bind cube map SRV
+	mContext->PSSetShaderResources(1, 1, mSky.mSRV.GetAddressOf());
+
+	DrawGameObject(&mSkull);
+
+	for (UINT i = 0; i < 5; ++i)
+	{
+		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
+		DrawGameObject(&mSphere);
+		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
+		DrawGameObject(&mSphere);
+	}
+
+	// unbind SRV
+	ID3D11ShaderResourceView* const NullSRV = nullptr;
+	mContext->PSSetShaderResources(1, 1, &NullSRV);
+
+	// draw sky
+
+	DrawGameObject(&mSky);
 
 	mSwapChain->Present(0, 0);
 }

@@ -67,7 +67,6 @@ cbuffer cbPerFrame : register(b1)
 };
 
 Texture2D gTexture0 : register(t0);
-//Texture2D gTexture1 : register(t1);
 SamplerState gSamplerState;
 
 struct VertexIn
@@ -90,7 +89,7 @@ VertexOut main(VertexIn vin)
 	VertexOut vout;
 
 	vout.PositionW = mul(gWorld, float4(vin.PositionL, 1)).xyz;
-	vout.PositionH = mul(gWorldViewProj, float4(vout.PositionW, 1));
+	vout.PositionH = mul(gWorldViewProj, float4(vin.PositionL, 1));
 	vout.NormalW = mul((float3x3)gWorldInverseTranspose, vin.NormalL);
 	vout.TexCoord = mul(gTexTransform, float4(vin.TexCoord, 0, 1)).xy;
 

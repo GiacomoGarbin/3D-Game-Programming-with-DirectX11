@@ -128,6 +128,7 @@ D3DApp::~D3DApp()
 	SafeRelease(mDevice);
 
 	SafeRelease((*mWireframeRS.GetAddressOf()));
+	SafeRelease((*mNoCullRS.GetAddressOf()));
 	
 	SafeRelease((*mLessEqualDSS.GetAddressOf()));
 
@@ -321,6 +322,23 @@ bool D3DApp::InitDirect3D()
 		HR(mDevice->CreateRasterizerState(&desc, &mWireframeRS));
 	}
 
+	// no cull
+	{
+		D3D11_RASTERIZER_DESC desc;
+		desc.FillMode = D3D11_FILL_SOLID;
+		desc.CullMode = D3D11_CULL_NONE;
+		desc.FrontCounterClockwise = false;
+		desc.DepthBias = 0;
+		desc.DepthBiasClamp = 0;
+		desc.SlopeScaledDepthBias = 0;
+		desc.DepthClipEnable = true;
+		desc.ScissorEnable = false;
+		desc.MultisampleEnable = false;
+		desc.AntialiasedLineEnable = false;
+
+		HR(mDevice->CreateRasterizerState(&desc, &mNoCullRS));
+	}
+
 	// depth stencil states
 
 	// less equal
@@ -510,6 +528,30 @@ float D3DApp::AspectRatio() const
 {
 	return static_cast<float>(mMainWindowWidth) / static_cast<float>(mMainWindowHeight);
 }
+
+
+void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view)
+{
+	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+	std::wstring path = base + name;
+
+	ID3D11Resource* resource = nullptr;
+
+	HR(CreateDDSTextureFromFile(mDevice, path.c_str(), &resource, view));
+
+	// check created texture
+	{
+		ID3D11Texture2D* texture = nullptr;
+		HR(resource->QueryInterface(IID_ID3D11Texture2D, (void**)&texture));
+
+		D3D11_TEXTURE2D_DESC desc;
+		texture->GetDesc(&desc);
+
+		SafeRelease(texture);
+	}
+
+	SafeRelease(resource);
+};
 
 void GeometryGenerator::CreateBox(float width, float height, float depth, Mesh& mesh)
 {
@@ -899,7 +941,7 @@ void GeometryGenerator::CreateSphere(float radius, UINT n, Mesh& mesh)
 		float t = GameMath::GetAngle2(XMFLOAT2(vertex.mPosition.x, vertex.mPosition.z)); // theta
 		float p = std::acos(vertex.mPosition.y / radius); // phi
 
-		vertex.mTexCoord = XMFLOAT2(t / XM_2PI, p / XM_2PI);
+		vertex.mTexCoord = XMFLOAT2(t / XM_2PI, p / XM_PI);
 	}
 }
 
@@ -1200,12 +1242,8 @@ void GeometryGenerator::Waves::Disturb(UINT i, UINT j, float magnitude)
 float GameMath::GetAngle2(XMFLOAT2 P)
 {
 	float theta = 0;
-
-	if (P.x == 0 && P.y != 0)
-	{
-		theta = P.y > 0 ? +XM_PIDIV2 : -XM_PIDIV2;
-	}
-	else if (P.x > 0) // Quadrant I or IV
+	
+	if (P.x >= 0) // Quadrant I or IV
 	{
 		theta = std::atan(P.y / P.x); // in [-pi/2, +pi/2]
 
