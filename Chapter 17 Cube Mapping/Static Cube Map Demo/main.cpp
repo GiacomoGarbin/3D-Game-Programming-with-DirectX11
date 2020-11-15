@@ -62,7 +62,7 @@ TestApp::TestApp() :
 	mPerObjectCB(nullptr),
 	mSamplerState(nullptr)
 {
-	mMainWindowTitle = "Ch17 Cube Mapping";
+	mMainWindowTitle = "Ch17 Static Cube Map Demo";
 
 	//m4xMSAAEnabled = true;
 
