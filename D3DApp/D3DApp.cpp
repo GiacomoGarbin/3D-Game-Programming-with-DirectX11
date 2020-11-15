@@ -1419,6 +1419,26 @@ void CameraObject::SetFrustum(float FovAngleY, float AspectRatio, float NearZ, f
 	BoundingFrustum::CreateFromMatrix(mFrustum, mProj);
 }
 
+
+void CameraObject::LookAt(const XMFLOAT3& position, const XMFLOAT3& target, const XMFLOAT3& up)
+{
+	XMVECTOR P = XMLoadFloat3(&position);
+	XMVECTOR T = XMLoadFloat3(&target);
+	XMVECTOR U = XMLoadFloat3(&up);
+
+	XMVECTOR L = XMVector3Normalize(T - P);
+	XMVECTOR R = XMVector3Normalize(XMVector3Cross(U, L));
+
+	XMStoreFloat3(&mPosition, P);
+	XMStoreFloat3(&mLook, L);
+	XMStoreFloat3(&mRight, R);
+
+	{
+		XMVECTOR U = XMVector3Cross(L, R);
+		XMStoreFloat3(&mUp, U);
+	}
+}
+
 void CameraObject::UpdateView()
 {
 	XMVECTOR R = XMLoadFloat3(&mRight);
@@ -1497,3 +1517,148 @@ void CameraObject::rotate(float angle)
 	XMStoreFloat3(&mUp, XMVector3TransformNormal(XMLoadFloat3(&mUp), R));
 	XMStoreFloat3(&mLook, XMVector3TransformNormal(XMLoadFloat3(&mLook), R));
 }
+
+
+DynamicCubeMap::DynamicCubeMap() :
+	mDSV(nullptr),
+	mSRV(nullptr)
+{
+	for (UINT i = 0; i < 6; ++i)
+	{
+		mRTV[i] = nullptr;
+	}
+
+	mCubeMapSize = 256;
+
+	mViewport.TopLeftX = 0;
+	mViewport.TopLeftY = 0;
+	mViewport.Width = mCubeMapSize;
+	mViewport.Height = mCubeMapSize;
+	mViewport.MinDepth = 0;
+	mViewport.MaxDepth = 1;
+}
+
+DynamicCubeMap::~DynamicCubeMap()
+{
+	SafeRelease(mDSV);
+
+	for (UINT i = 0; i < 6; ++i)
+	{
+		SafeRelease(mRTV[i]);
+	}
+
+	SafeRelease(mSRV);
+}
+
+void DynamicCubeMap::Init(ID3D11Device* device, const XMFLOAT3& P)
+{
+	// RTV & SRV
+	{
+		D3D11_TEXTURE2D_DESC desc;
+		desc.Width = mCubeMapSize;
+		desc.Height = mCubeMapSize;
+		desc.MipLevels = 0;
+		desc.ArraySize = 6;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS | D3D11_RESOURCE_MISC_TEXTURECUBE;
+
+		ID3D11Texture2D* texture = nullptr;
+		HR(device->CreateTexture2D(&desc, nullptr, &texture));
+
+		// RTV
+		{
+			D3D11_RENDER_TARGET_VIEW_DESC desc;
+			desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+			desc.Texture2DArray.ArraySize = 1;
+			desc.Texture2DArray.MipSlice = 0;
+
+			for (UINT i = 0; i < 6; ++i)
+			{
+				desc.Texture2DArray.FirstArraySlice = i;
+				HR(device->CreateRenderTargetView(texture, &desc, &mRTV[i]));
+			}
+		}
+
+		// SRV
+		{
+			D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+			desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+			desc.TextureCube.MostDetailedMip = 0;
+			desc.TextureCube.MipLevels = -1;
+
+			HR(device->CreateShaderResourceView(texture, &desc, &mSRV));
+		}
+
+		SafeRelease(texture);
+	}
+
+	// DSV
+	{
+		D3D11_TEXTURE2D_DESC desc;
+		desc.Width = mCubeMapSize;
+		desc.Height = mCubeMapSize;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Format = DXGI_FORMAT_D32_FLOAT;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+
+		ID3D11Texture2D* texture = nullptr;
+		HR(device->CreateTexture2D(&desc, nullptr, &texture));
+
+		// DSV
+		{
+			D3D11_DEPTH_STENCIL_VIEW_DESC desc;
+			desc.Format = DXGI_FORMAT_D32_FLOAT;
+			desc.Flags = 0;
+			desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+			desc.Texture2D.MipSlice = 0;
+			HR(device->CreateDepthStencilView(texture, &desc, &mDSV));
+		}
+
+		SafeRelease(texture);
+	}
+
+	// camera
+	{
+		XMFLOAT3 T[6] =
+		{
+			XMFLOAT3(P.x + 1, P.y, P.z), // +X
+			XMFLOAT3(P.x - 1, P.y, P.z), // -X
+			XMFLOAT3(P.x, P.y + 1, P.z), // +Y
+			XMFLOAT3(P.x, P.y - 1, P.z), // -Y
+			XMFLOAT3(P.x, P.y, P.z + 1), // +Z
+			XMFLOAT3(P.x, P.y, P.z - 1), // -Z
+		};
+
+		XMFLOAT3 U[6] =
+		{
+			XMFLOAT3(0, +1, 0), // +X
+			XMFLOAT3(0, +1, 0), // -X
+			XMFLOAT3(0, 0, -1), // +Y
+			XMFLOAT3(0, 0, +1), // -Y
+			XMFLOAT3(0, +1, 0), // +Z
+			XMFLOAT3(0, +1, 0), // -Z
+		};
+
+		for (UINT i = 0; i < 6; ++i)
+		{
+			mCamera[i].LookAt(P, T[i], U[i]);
+			mCamera[i].SetFrustum(XM_PIDIV2, 1, 0.1f, 1000);
+			mCamera[i].UpdateView();
+		}
+	}
+}
+
+//void DynamicCubeMap::Draw() {}

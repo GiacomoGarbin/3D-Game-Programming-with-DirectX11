@@ -108,6 +108,7 @@ public:
 	void walk(float delta);
 	void strafe(float delta);
 
+	void LookAt(const XMFLOAT3& position, const XMFLOAT3& target, const XMFLOAT3& up);
 	void UpdateView();
 
 	void pitch(float angle);
@@ -453,6 +454,25 @@ public:
 	void Blur(ID3D11DeviceContext* context, ID3D11ShaderResourceView* InputTextureSRV, ID3D11UnorderedAccessView* InputTextureUAV, UINT count);
 
 	//void SetGaussianWeights(float sigma);
+};
+
+class DynamicCubeMap
+{
+public:
+	ID3D11DepthStencilView* mDSV;
+	ID3D11RenderTargetView* mRTV[6];
+	ID3D11ShaderResourceView* mSRV;
+	
+	UINT mCubeMapSize;
+	D3D11_VIEWPORT mViewport;
+
+	CameraObject mCamera[6];
+
+	DynamicCubeMap();
+	~DynamicCubeMap();
+
+	void Init(ID3D11Device* device, const XMFLOAT3& P);
+	//void Draw();
 };
 
 #endif // D3DAPP_H

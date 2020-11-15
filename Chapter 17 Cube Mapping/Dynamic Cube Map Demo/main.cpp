@@ -18,6 +18,8 @@ public:
 	void UpdateScene(float dt) override;
 	void DrawScene() override;
 
+	void DrawScene(const CameraObject& camera, bool DrawCenterSphere);
+
 	struct PerFrameCB
 	{
 		std::array<LightDirectional, 3> mLights;
@@ -50,10 +52,13 @@ public:
 	GameObject mSphere;
 	GameObject mCylinder;
 	GameObject mSky;
+	GameObject mCenterSphere;
 
 	std::array<LightDirectional, 3> mLights;
 
 	ID3D11SamplerState* mSamplerState;
+
+	DynamicCubeMap mDynamicCubeMap;
 };
 
 TestApp::TestApp() :
@@ -99,7 +104,7 @@ bool TestApp::Init()
 	}
 
 	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/";
-	std::wstring proj = L"Chapter 17 Cube Mapping/Static Cube Map Demo/";
+	std::wstring proj = L"Chapter 17 Cube Mapping/Dynamic Cube Map Demo/";
 
 	// VS
 	{
@@ -115,6 +120,7 @@ bool TestApp::Init()
 		mBox.mVertexShader = shader;
 		mCylinder.mVertexShader = shader;
 		mSphere.mVertexShader = shader;
+		mCenterSphere.mVertexShader = shader;
 
 		// input layout
 		{
@@ -134,6 +140,7 @@ bool TestApp::Init()
 			mBox.mInputLayout = layout;
 			mCylinder.mInputLayout = layout;
 			mSphere.mInputLayout = layout;
+			mCenterSphere.mInputLayout = layout;
 		}
 	}
 
@@ -146,7 +153,7 @@ bool TestApp::Init()
 		defines.push_back({ "ENABLE_TEXTURE",        "1" });
 		//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 		//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-		defines.push_back({ "ENABLE_REFLECTION",     "1" });
+		defines.push_back({ "ENABLE_REFLECTION",     "0" });
 		defines.push_back({ "ENABLE_FOG",            "0" });
 		defines.push_back({ nullptr, nullptr });
 
@@ -190,29 +197,6 @@ bool TestApp::Init()
 		HR(mDevice->CreateBuffer(&desc, nullptr, &mPerObjectCB));
 	}
 
-	static auto UpdateBuffer = [this](Microsoft::WRL::ComPtr<ID3D11Buffer>& buffer, UINT start, UINT count, UINT bytes, const void* data) -> void
-	{
-		D3D11_BOX region;
-		region.left = bytes * start;
-		region.right = bytes * (start + count);
-		region.top = 0;
-		region.bottom = 1;
-		region.front = 0;
-		region.back = 1;
-
-		mContext->UpdateSubresource(*buffer.GetAddressOf(), 0, &region, data, 0, 0);
-	};
-
-	static auto UpdateVertexBuffer = [](Microsoft::WRL::ComPtr<ID3D11Buffer>& buffer, const GameObject& obj) -> void
-	{
-		UpdateBuffer(buffer, obj.mVertexStart, obj.mMesh.mVertices.size(), sizeof(GeometryGenerator::Vertex), obj.mMesh.mVertices.data());
-	};
-
-	static auto UpdateIndexBuffer = [](Microsoft::WRL::ComPtr<ID3D11Buffer>& buffer, const GameObject& obj) -> void
-	{
-		UpdateBuffer(buffer, obj.mIndexStart, obj.mMesh.mIndices.size(), sizeof(UINT), obj.mMesh.mIndices.data());
-	};
-
 	// build skull geometry
 	{
 		GeometryGenerator::CreateSkull(mSkull.mMesh);
@@ -220,12 +204,10 @@ bool TestApp::Init()
 		mSkull.mVertexStart = 0;
 		mSkull.mIndexStart = 0;
 
-		mSkull.mWorld = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0, 1, 0);
-
-		mSkull.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-		mSkull.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+		mSkull.mMaterial.mAmbient = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
+		mSkull.mMaterial.mDiffuse = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
 		mSkull.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
-		mSkull.mMaterial.mReflect = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
+		mSkull.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
 		// PS
 		{
@@ -235,7 +217,7 @@ bool TestApp::Init()
 			defines.push_back({ "ENABLE_TEXTURE",        "0" });
 			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-			defines.push_back({ "ENABLE_REFLECTION",     "1" });
+			defines.push_back({ "ENABLE_REFLECTION",     "0" });
 			defines.push_back({ "ENABLE_FOG",            "0" });
 			defines.push_back({ nullptr, nullptr });
 
@@ -334,7 +316,7 @@ bool TestApp::Init()
 			{
 				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
 				{
-					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0},
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				};
 
 				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mSky.mInputLayout));
@@ -354,9 +336,52 @@ bool TestApp::Init()
 		}
 	}
 
+	// build center sphere geometry
+	{
+		GeometryGenerator::CreateSphere(0.5f, 3, mCenterSphere.mMesh);
+
+		mCenterSphere.mVertexStart = mSky.mVertexStart + mSky.mMesh.mVertices.size();
+		mCenterSphere.mIndexStart = mSky.mIndexStart + mSky.mMesh.mIndices.size();
+
+		mCenterSphere.mWorld = XMMatrixScaling(2, 2, 2) * XMMatrixTranslation(0, 2, 0);
+
+		mCenterSphere.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+		mCenterSphere.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+		mCenterSphere.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mCenterSphere.mMaterial.mReflect = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
+
+		mCenterSphere.mSRV = mBox.mSRV;
+
+		// PS
+		{
+			std::wstring path = base + proj + L"PS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			defines.push_back({ "ENABLE_TEXTURE",        "1" });
+			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
+			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
+			defines.push_back({ "ENABLE_REFLECTION",     "1" });
+			defines.push_back({ "ENABLE_FOG",            "0" });
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mCenterSphere.mPixelShader));
+		}
+	}
+
 	// create vertex and input buffers
 	{
-		std::array<GameObject*, 6> objects = { &mSkull, &mGrid, &mBox, &mCylinder, &mSphere, &mSky };
+		std::array<GameObject*, 7> objects =
+		{
+			&mSkull,
+			&mGrid,
+			&mBox,
+			&mCylinder,
+			&mSphere,
+			&mSky,
+			&mCenterSphere
+		};
 
 		std::vector<GeometryGenerator::Vertex> vertices;
 		std::vector<UINT> indices;
@@ -442,6 +467,9 @@ bool TestApp::Init()
 		mContext->PSSetSamplers(0, 1, &mSamplerState);
 	}
 
+	XMFLOAT3 CenterSpherePosition = XMFLOAT3(0.0f, 2.0f, 0.0f);
+	mDynamicCubeMap.Init(mDevice, CenterSpherePosition);
+
 	return true;
 }
 
@@ -473,6 +501,15 @@ void TestApp::UpdateScene(float dt)
 	}
 
 	mCamera.UpdateView();
+
+	// update skull position
+	{
+		XMMATRIX S = XMMatrixScaling(0.2f, 0.2f, 0.2f);				// scale
+		XMMATRIX T = XMMatrixTranslation(3.0f, 2.0f, 0.0f);			// translate
+		XMMATRIX LR = XMMatrixRotationY(2.0f * mTimer.TotalTime()); // local rotate
+		XMMATRIX WR = XMMatrixRotationY(0.5f * mTimer.TotalTime()); // world rotate
+		mSkull.mWorld = S * LR * T * WR;
+	}
 }
 
 void TestApp::DrawScene()
@@ -480,14 +517,52 @@ void TestApp::DrawScene()
 	assert(mContext);
 	assert(mSwapChain);
 
-	static auto SetPerFrameCB = [this]() -> void
+	mContext->RSSetViewports(1, &mDynamicCubeMap.mViewport);
+
+	std::array<XMVECTORF32, 6> colors =
+	{
+		Colors::Silver,
+		Colors::Yellow,
+		Colors::Red,
+		Colors::Blue,
+		Colors::Green,
+		Colors::Magenta,
+	};
+
+	for (UINT i = 0; i < 6; ++i)
+	{
+		mContext->ClearRenderTargetView(mDynamicCubeMap.mRTV[i], Colors::Silver);
+		//mContext->ClearRenderTargetView(mDynamicCubeMap.mRTV[i], colors[i]);
+		mContext->ClearDepthStencilView(mDynamicCubeMap.mDSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+
+		mContext->OMSetRenderTargets(1, &mDynamicCubeMap.mRTV[i], mDynamicCubeMap.mDSV);
+
+		DrawScene(mDynamicCubeMap.mCamera[i], false);
+	}
+
+	mContext->GenerateMips(mDynamicCubeMap.mSRV);
+
+	mContext->RSSetViewports(1, &mViewport);
+	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
+
+	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
+	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+
+	DrawScene(mCamera, true);
+
+	mSwapChain->Present(0, 0);
+}
+
+void TestApp::DrawScene(const CameraObject& camera, bool DrawCenterSphere)
+{
+	auto SetPerFrameCB = [this, &camera]() -> void
 	{
 		PerFrameCB buffer;
 		buffer.mLights[0] = mLights[0];
 		buffer.mLights[1] = mLights[1];
 		buffer.mLights[2] = mLights[2];
 		//XMStoreFloat3(&buffer.mEyePositionW, mEyePosition);
-		buffer.mEyePositionW = mCamera.mPosition;
+		buffer.mEyePositionW = camera.mPosition;
 		buffer.mFogStart = 15;
 		buffer.mFogRange = 175;
 		XMStoreFloat4(&buffer.mFogColor, Colors::Silver);
@@ -498,13 +573,13 @@ void TestApp::DrawScene()
 		mContext->PSSetConstantBuffers(1, 1, &mPerFrameCB);
 	};
 
-	static auto SetPerObjectCB = [this](GameObject* obj) -> void
+	auto SetPerObjectCB = [this, &camera](GameObject* obj) -> void
 	{
 		PerObjectCB buffer;
 		XMStoreFloat4x4(&buffer.mWorld, obj->mWorld);
 		XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(obj->mWorld));
-		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * mCamera.mProj);
+		XMMATRIX V = XMLoadFloat4x4(&camera.mView);
+		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * camera.mProj);
 		buffer.mMaterial = obj->mMaterial;
 		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
 
@@ -514,7 +589,7 @@ void TestApp::DrawScene()
 		mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
 	};
 
-	static auto DrawGameObject = [this](GameObject* obj) -> void
+	auto DrawGameObject = [this, &SetPerObjectCB](GameObject* obj) -> void
 	{
 		FLOAT BlendFactor[] = { 0, 0, 0, 0 };
 
@@ -593,13 +668,11 @@ void TestApp::DrawScene()
 		mContext->PSSetShaderResources(0, 1, &NullSRV);
 	};
 
-	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
-	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
-
 	SetPerFrameCB();
 
 	// draw without reflection
 
+	DrawGameObject(&mSkull);
 	DrawGameObject(&mGrid);
 	DrawGameObject(&mBox);
 
@@ -609,32 +682,29 @@ void TestApp::DrawScene()
 		DrawGameObject(&mCylinder);
 		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
 		DrawGameObject(&mCylinder);
-	}
 
-	// draw with reflection
-
-	// bind cube map SRV
-	mContext->PSSetShaderResources(1, 1, mSky.mSRV.GetAddressOf());
-
-	DrawGameObject(&mSkull);
-
-	for (UINT i = 0; i < 5; ++i)
-	{
 		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
 		DrawGameObject(&mSphere);
 		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
 		DrawGameObject(&mSphere);
 	}
 
-	// unbind SRV
-	ID3D11ShaderResourceView* const NullSRV = nullptr;
-	mContext->PSSetShaderResources(1, 1, &NullSRV);
+	// draw with reflection
+
+	if (DrawCenterSphere)
+	{
+		// bind dynamic cube map SRV
+		mContext->PSSetShaderResources(1, 1, &mDynamicCubeMap.mSRV);
+		
+		DrawGameObject(&mCenterSphere);
+
+		// unbind SRV
+		ID3D11ShaderResourceView* const NullSRV = nullptr;
+		mContext->PSSetShaderResources(1, 1, &NullSRV);
+	}
 
 	// draw sky
-
 	DrawGameObject(&mSky);
-
-	mSwapChain->Present(0, 0);
 }
 
 int main()
