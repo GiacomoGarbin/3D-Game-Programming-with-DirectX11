@@ -200,6 +200,17 @@ float4 main(VertexOut pin) : SV_TARGET
 {
 	pin.NormalW = normalize(pin.NormalW); // interpolated normals can be unnormalized
 
+#if ENABLE_SPHERE_TEXCOORD
+	const float PI = 3.14159265359f;
+	float3 D = -pin.NormalW;
+
+	float u = 0.5f + atan2(D.x, D.z) / (2 * PI);
+	float v = 0.5f - asin(D.y) / PI;
+	pin.TexCoord = float2(u, v);
+
+	//return float4((pin.TexCoord + 1) * 0.5f, 0, 1);
+#endif // ENABLE_SPHERE_TEXCOORD
+
 	float3 E = gEyePositionW - pin.PositionW; // the eye vector is oriented from the surface to the eye position
 	float DistToEye = length(E);
 	E /= DistToEye;
@@ -238,6 +249,7 @@ float4 main(VertexOut pin) : SV_TARGET
 
 #if ENABLE_REFLECTION
 		float3 ReflectVec = reflect(-E, pin.NormalW);
+		//float3 RefractVec = refract(-E, pin.NormalW, 1);
 		float4 ReflectCol = gCubeMap.Sample(gSamplerState, ReflectVec);
 		color += gMaterial.reflect * ReflectCol;
 #endif // ENABLE_REFLECTION

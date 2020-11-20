@@ -151,6 +151,7 @@ bool TestApp::Init()
 
 		std::vector<D3D_SHADER_MACRO> defines;
 		defines.push_back({ "ENABLE_TEXTURE",        "1" });
+		defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
 		//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 		//defines.push_back({ "ENABLE_LIGHTING",       "1" });
 		defines.push_back({ "ENABLE_REFLECTION",     "0" });
@@ -164,7 +165,6 @@ bool TestApp::Init()
 		mGrid.mPixelShader = shader;
 		mBox.mPixelShader = shader;
 		mCylinder.mPixelShader = shader;
-		mSphere.mPixelShader = shader;
 	}
 
 	// build per frame costant buffer
@@ -215,6 +215,7 @@ bool TestApp::Init()
 
 			std::vector<D3D_SHADER_MACRO> defines;
 			defines.push_back({ "ENABLE_TEXTURE",        "0" });
+			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
 			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
 			defines.push_back({ "ENABLE_REFLECTION",     "0" });
@@ -284,10 +285,28 @@ bool TestApp::Init()
 		mSphere.mVertexStart = mCylinder.mVertexStart + mCylinder.mMesh.mVertices.size();
 		mSphere.mIndexStart = mCylinder.mIndexStart + mCylinder.mMesh.mIndices.size();
 
-		mSphere.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
-		mSphere.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
+		mSphere.mMaterial.mAmbient = XMFLOAT4(1, 1, 1, 1.0f);
+		mSphere.mMaterial.mDiffuse = XMFLOAT4(1, 1, 1, 1.0f);
 		mSphere.mMaterial.mSpecular = XMFLOAT4(0.9f, 0.9f, 0.9f, 16.0f);
 		mSphere.mMaterial.mReflect = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
+
+		// PS
+		{
+			std::wstring path = base + proj + L"PS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			defines.push_back({ "ENABLE_TEXTURE",        "1" });
+			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "1" });
+			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
+			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
+			defines.push_back({ "ENABLE_REFLECTION",     "0" });
+			defines.push_back({ "ENABLE_FOG",            "0" });
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mSphere.mPixelShader));
+		}
 
 		mSphere.mSRV = mBox.mSRV;
 	}
@@ -357,11 +376,12 @@ bool TestApp::Init()
 			std::wstring path = base + proj + L"PS.hlsl";
 
 			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ "ENABLE_TEXTURE",        "1" });
+			defines.push_back({ "ENABLE_TEXTURE",         "1" });
+			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "1" });
 			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-			defines.push_back({ "ENABLE_REFLECTION",     "1" });
-			defines.push_back({ "ENABLE_FOG",            "0" });
+			defines.push_back({ "ENABLE_REFLECTION",      "1" });
+			defines.push_back({ "ENABLE_FOG",             "0" });
 			defines.push_back({ nullptr, nullptr });
 
 			ID3DBlob* pCode;
@@ -519,20 +539,9 @@ void TestApp::DrawScene()
 
 	mContext->RSSetViewports(1, &mDynamicCubeMap.mViewport);
 
-	std::array<XMVECTORF32, 6> colors =
-	{
-		Colors::Silver,
-		Colors::Yellow,
-		Colors::Red,
-		Colors::Blue,
-		Colors::Green,
-		Colors::Magenta,
-	};
-
 	for (UINT i = 0; i < 6; ++i)
 	{
 		mContext->ClearRenderTargetView(mDynamicCubeMap.mRTV[i], Colors::Silver);
-		//mContext->ClearRenderTargetView(mDynamicCubeMap.mRTV[i], colors[i]);
 		mContext->ClearDepthStencilView(mDynamicCubeMap.mDSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 
 		mContext->OMSetRenderTargets(1, &mDynamicCubeMap.mRTV[i], mDynamicCubeMap.mDSV);
@@ -561,7 +570,6 @@ void TestApp::DrawScene(const CameraObject& camera, bool DrawCenterSphere)
 		buffer.mLights[0] = mLights[0];
 		buffer.mLights[1] = mLights[1];
 		buffer.mLights[2] = mLights[2];
-		//XMStoreFloat3(&buffer.mEyePositionW, mEyePosition);
 		buffer.mEyePositionW = camera.mPosition;
 		buffer.mFogStart = 15;
 		buffer.mFogRange = 175;

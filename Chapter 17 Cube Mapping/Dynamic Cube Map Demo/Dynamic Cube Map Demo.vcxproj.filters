@@ -40,5 +40,11 @@
     <FxCompile Include="VS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="SphereVS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="SpherePS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

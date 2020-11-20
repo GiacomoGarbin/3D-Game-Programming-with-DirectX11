@@ -938,11 +938,31 @@ void GeometryGenerator::CreateSphere(float radius, UINT n, Mesh& mesh)
 
 		vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
 
-		float t = GameMath::GetAngle2(XMFLOAT2(vertex.mPosition.x, vertex.mPosition.z)); // theta
-		float p = std::acos(vertex.mPosition.y / radius); // phi
 
-		vertex.mTexCoord = XMFLOAT2(t / XM_2PI, p / XM_PI);
+		// frank luna
+		{
+			float t = GameMath::GetAngle2(XMFLOAT2(vertex.mPosition.x, vertex.mPosition.z)); // theta
+			float p = std::acos(vertex.mPosition.y / radius); // phi
+			vertex.mTexCoord = XMFLOAT2(t / XM_2PI, p / XM_PI);
+		}
+
+		// wikipedia : texture mapping
+		{
+			XMVECTOR D = N;
+			XMFLOAT3 d;
+			XMStoreFloat3(&d, D);
+
+			float u = 0.5f + std::atan2(d.x, d.z) / XM_2PI;
+			float v = 0.5f - std::asin(d.y) / XM_PI;
+			vertex.mTexCoord = XMFLOAT2(u, v);
+		}
 	}
+}
+
+void GeometryGenerator::CreateSphere(float radius, UINT slices, UINT stacks, Mesh& mesh)
+{
+	mesh.mVertices.clear();
+	mesh.mIndices.clear();
 }
 
 void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)

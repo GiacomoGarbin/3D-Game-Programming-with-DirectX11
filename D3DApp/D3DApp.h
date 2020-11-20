@@ -232,6 +232,7 @@ public:
 	static void CreateGrid(float width, float depth, UINT m, UINT n, Mesh& mesh);
 	static void CreateCylinder(float BottomRadius, float TopRadius, float height, UINT slices, UINT stacks, Mesh& mesh);
 	static void CreateSphere(float radius, UINT n, Mesh& mesh);
+	static void CreateSphere(float radius, UINT slices, UINT stacks, Mesh& mesh);
 
 	static void CreateModel(std::string name, Mesh& mesh);
 	static void CreateSkull(Mesh& mesh) { CreateModel("skull.txt", mesh); };
