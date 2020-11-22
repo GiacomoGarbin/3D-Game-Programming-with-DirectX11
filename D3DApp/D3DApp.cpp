@@ -603,37 +603,37 @@ void GeometryGenerator::CreateBox(float width, float height, float depth, Mesh& 
 
 	mesh.mVertices.resize(24);
 
-	//// front
+	// front
 	mesh.mVertices.at(0x00) = Vertex(-w, -h, -d, 0, 0, -1, 0, 0, 0, 0, 1);
 	mesh.mVertices.at(0x01) = Vertex(-w, +h, -d, 0, 0, -1, 0, 0, 0, 0, 0);
 	mesh.mVertices.at(0x02) = Vertex(+w, +h, -d, 0, 0, -1, 0, 0, 0, 1, 0);
 	mesh.mVertices.at(0x03) = Vertex(+w, -h, -d, 0, 0, -1, 0, 0, 0, 1, 1);
 
-	//// back
+	// back
 	mesh.mVertices.at(0x04) = Vertex(-w, -h, +d, 0, 0, +1, 0, 0, 0, 1, 1);
 	mesh.mVertices.at(0x05) = Vertex(+w, -h, +d, 0, 0, +1, 0, 0, 0, 0, 1);
 	mesh.mVertices.at(0x06) = Vertex(+w, +h, +d, 0, 0, +1, 0, 0, 0, 0, 0);
 	mesh.mVertices.at(0x07) = Vertex(-w, +h, +d, 0, 0, +1, 0, 0, 0, 1, 0);
 
-	//// top
+	// top
 	mesh.mVertices.at(0x08) = Vertex(-w, +h, -d, 0, +1, 0, 0, 0, 0, 0, 1);
 	mesh.mVertices.at(0x09) = Vertex(-w, +h, +d, 0, +1, 0, 0, 0, 0, 0, 0);
 	mesh.mVertices.at(0x0A) = Vertex(+w, +h, +d, 0, +1, 0, 0, 0, 0, 1, 0);
 	mesh.mVertices.at(0x0B) = Vertex(+w, +h, -d, 0, +1, 0, 0, 0, 0, 1, 1);
 
-	//// bottom
+	// bottom
 	mesh.mVertices.at(0x0C) = Vertex(-w, -h, -d, 0, -1, 0, 0, 0, 0, 1, 1);
 	mesh.mVertices.at(0x0D) = Vertex(+w, -h, -d, 0, -1, 0, 0, 0, 0, 0, 1);
 	mesh.mVertices.at(0x0E) = Vertex(+w, -h, +d, 0, -1, 0, 0, 0, 0, 0, 0);
 	mesh.mVertices.at(0x0F) = Vertex(-w, -h, +d, 0, -1, 0, 0, 0, 0, 1, 0);
 
-	//// left
+	// left
 	mesh.mVertices.at(0x10) = Vertex(-w, -h, +d, -1, 0, 0, 0, 0, 0, 0, 1);
 	mesh.mVertices.at(0x11) = Vertex(-w, +h, +d, -1, 0, 0, 0, 0, 0, 0, 0);
 	mesh.mVertices.at(0x12) = Vertex(-w, +h, -d, -1, 0, 0, 0, 0, 0, 1, 0);
 	mesh.mVertices.at(0x13) = Vertex(-w, -h, -d, -1, 0, 0, 0, 0, 0, 1, 1);
 
-	//// right
+	// right
 	mesh.mVertices.at(0x14) = Vertex(+w, -h, -d, +1, 0, 0, 0, 0, 0, 0, 1);
 	mesh.mVertices.at(0x15) = Vertex(+w, +h, -d, +1, 0, 0, 0, 0, 0, 0, 0);
 	mesh.mVertices.at(0x16) = Vertex(+w, +h, +d, +1, 0, 0, 0, 0, 0, 1, 0);
@@ -748,8 +748,8 @@ void GeometryGenerator::CreateCylinder(float BottomRadius, float TopRadius, floa
 			vertex.mPosition = XMFLOAT3(r * c, y, r * s);
 			vertex.mTexCoord = XMFLOAT2((float)j / slices, 1 - (float)i / stacks);
 
-			XMVECTOR T = XMLoadFloat3(&XMFLOAT3(-s, 0, c));
-			XMVECTOR B = XMLoadFloat3(&XMFLOAT3((dr * stacks) * c, -height, (dr * stacks) * s));
+			XMVECTOR T = XMVectorSet(-s, 0, c, 0);
+			XMVECTOR B = XMVectorSet((dr * stacks) * c, -height, (dr * stacks) * s, 0);
 			XMVECTOR N = XMVector3Normalize(XMVector3Cross(T, B));
 
 			XMStoreFloat3(&vertex.mNormal, N);
