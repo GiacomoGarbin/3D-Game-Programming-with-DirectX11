@@ -53,9 +53,7 @@ cbuffer cbPerObject : register(b0)
 
 cbuffer cbPerFrame : register(b1)
 {
-	LightDirectional gLightDirectional;
-	LightPoint       gLightPoint;
-	LightSpot        gLightSpot;
+	LightDirectional gLights[3];
 
 	float3 gEyePositionW;
 	float  pad1;
@@ -64,15 +62,22 @@ cbuffer cbPerFrame : register(b1)
 	float  gFogRange;
 	float2 pad2;
 	float4 gFogColor;
-};
 
-Texture2D gTexture0 : register(t0);
-SamplerState gSamplerState;
+	float gHeightScale;
+	float gMaxTessDistance;
+	float gMinTessDistance;
+	float gMinTessFactor;
+	float gMaxTessFactor;
+	float3 pad3;
+
+	float4x4 gViewProj;
+};
 
 struct VertexIn
 {
 	float3 PositionL : POSITION;
 	float3 NormalL   : NORMAL;
+	float3 TangentL  : TANGENT;
 	float2 TexCoord  : TEXCOORD;
 };
 
@@ -81,7 +86,9 @@ struct VertexOut
 	float3 PositionW : POSITION;
 	float4 PositionH : SV_POSITION;
 	float3 NormalW   : NORMAL;
+	float3 TangentW  : TANGENT;
 	float2 TexCoord  : TEXCOORD;
+	float TessFactor : TESSFACTOR;
 };
 
 VertexOut main(VertexIn vin)
@@ -90,8 +97,14 @@ VertexOut main(VertexIn vin)
 
 	vout.PositionW = mul(gWorld, float4(vin.PositionL, 1)).xyz;
 	vout.PositionH = mul(gWorldViewProj, float4(vin.PositionL, 1));
-	vout.NormalW = mul((float3x3)gWorldInverseTranspose, vin.NormalL);
-	vout.TexCoord = mul(gTexTransform, float4(vin.TexCoord, 0, 1)).xy;
+	vout.NormalW   = mul((float3x3)gWorldInverseTranspose, vin.NormalL);
+	vout.TangentW  = mul((float3x3)gWorld, vin.TangentL);
+	vout.TexCoord  = mul(gTexTransform, float4(vin.TexCoord, 0, 1)).xy;
+
+	float d = distance(vout.PositionW, gEyePositionW);
+	float f = saturate((gMinTessDistance - d) / (gMinTessDistance - gMaxTessDistance));
+	// from [0,1] to [gMinTessFactor,gMaxTessFactor]
+	vout.TessFactor = gMinTessFactor + f * (gMaxTessFactor - gMinTessFactor);
 
 	return vout;
 }

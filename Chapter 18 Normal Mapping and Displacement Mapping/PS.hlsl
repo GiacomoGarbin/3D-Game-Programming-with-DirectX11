@@ -62,17 +62,28 @@ cbuffer cbPerFrame : register(b1)
 	float  gFogRange;
 	float2 pad2;
 	float4 gFogColor;
+
+	float gHeightScale;
+	float gMaxTessDistance;
+	float gMinTessDistance;
+	float gMinTessFactor;
+	float gMaxTessFactor;
+	float3 pad3;
+
+	float4x4 gViewProj;
 };
 
-Texture2D gTexture : register(t0);
-TextureCube gCubeMap : register(t1);
+Texture2D gAlbedoTexture : register(t0);
+Texture2D gNormalTexture : register(t1);
+TextureCube gCubeMap : register(t2);
 SamplerState gSamplerState;
 
-struct VertexOut
+struct DomainOut
 {
 	float3 PositionW : POSITION;
 	float4 PositionH : SV_POSITION;
 	float3 NormalW   : NORMAL;
+	float3 TangentW  : TANGENT;
 	float2 TexCoord  : TEXCOORD;
 };
 
@@ -196,7 +207,21 @@ void ComputeLightSpot(
 	specular *= attenuation;
 }
 
-float4 main(VertexOut pin) : SV_TARGET
+float3 NormalFromTangentToWorld(float3 NormalS, float3 NormalW, float3 TangentW)
+{
+	// from [0,1] to [-1,+1]
+	float3 NormalT = 2 * NormalS - 1;
+
+	float3 N = NormalW;
+	float3 T = normalize(TangentW - dot(TangentW, N) * N);
+	float3 B = cross(N, T);
+
+	float3x3 TBN = float3x3(T, B, N);
+
+	return mul(NormalT, TBN);
+}
+
+float4 main(DomainOut pin) : SV_TARGET
 {
 	pin.NormalW = normalize(pin.NormalW); // interpolated normals can be unnormalized
 
@@ -208,7 +233,8 @@ float4 main(VertexOut pin) : SV_TARGET
 	float v = 0.5f - asin(D.y) / PI;
 	pin.TexCoord = float2(u, v);
 
-	//return float4((pin.TexCoord + 1) * 0.5f, 0, 1);
+	// TODO : compute sphere tangent in the shader
+
 #endif // ENABLE_SPHERE_TEXCOORD
 
 	float3 E = gEyePositionW - pin.PositionW; // the eye vector is oriented from the surface to the eye position
@@ -218,13 +244,18 @@ float4 main(VertexOut pin) : SV_TARGET
 	float4 TextureColor = float4(1, 1, 1, 1);
 
 #if ENABLE_TEXTURE
-	TextureColor = gTexture.Sample(gSamplerState, pin.TexCoord);
+	TextureColor = gAlbedoTexture.Sample(gSamplerState, pin.TexCoord);
 
 	// if alpha clipping
 	{
 		clip(TextureColor.a - 0.1f);
 	}
 #endif // ENABLE_TEXTURE
+
+#if ENABLE_NORMAL_MAPPING
+	float3 N = gNormalTexture.Sample(gSamplerState, pin.TexCoord).rgb;
+	pin.NormalW = NormalFromTangentToWorld(N, pin.NormalW, pin.TangentW);
+#endif // ENABLE_NORMAL_MAPPING
 
 	float4 color = TextureColor;
 

@@ -18,8 +18,6 @@ public:
 	void UpdateScene(float dt) override;
 	void DrawScene() override;
 
-	void DrawScene(const CameraObject& camera, bool DrawCenterSphere);
-
 	struct PerFrameCB
 	{
 		std::array<LightDirectional, 3> mLights;
@@ -31,6 +29,15 @@ public:
 		float    mFogRange;
 		XMFLOAT2 pad2;
 		XMFLOAT4 mFogColor;
+
+		float mHeightScale;
+		float mMaxTessDistance;
+		float mMinTessDistance;
+		float mMinTessFactor;
+		float mMaxTessFactor;
+		XMFLOAT3 pad3;
+
+		XMFLOAT4X4 mViewProj;
 	};
 
 	ID3D11Buffer* mPerFrameCB;
@@ -52,7 +59,6 @@ public:
 	GameObject mSphere;
 	GameObject mCylinder;
 	GameObject mSky;
-	GameObject mCenterSphere;
 
 	std::array<LightDirectional, 3> mLights;
 
@@ -72,19 +78,19 @@ TestApp::TestApp() :
 	//m4xMSAAEnabled = true;
 
 	mLights[0].mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[0].mDiffuse = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-	mLights[0].mSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-	mLights[0].mDirection = XMFLOAT3(0.57735f, -0.57735f, 0.57735f);
+	mLights[0].mDiffuse = XMFLOAT4(0.7f, 0.7f, 0.6f, 1.0f);
+	mLights[0].mSpecular = XMFLOAT4(0.8f, 0.8f, 0.7f, 1.0f);
+	mLights[0].mDirection = XMFLOAT3(0.707f, 0.0f, 0.707f);
 
 	mLights[1].mAmbient = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	mLights[1].mDiffuse = XMFLOAT4(0.20f, 0.20f, 0.20f, 1.0f);
-	mLights[1].mSpecular = XMFLOAT4(0.25f, 0.25f, 0.25f, 1.0f);
-	mLights[1].mDirection = XMFLOAT3(-0.57735f, -0.57735f, 0.57735f);
+	mLights[1].mDiffuse = XMFLOAT4(0.40f, 0.40f, 0.40f, 1.0f);
+	mLights[1].mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+	mLights[1].mDirection = XMFLOAT3(0.0f, -0.707f, 0.707f);
 
 	mLights[2].mAmbient = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 	mLights[2].mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[2].mSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	mLights[2].mDirection = XMFLOAT3(0.0f, -0.707f, -0.707f);
+	mLights[2].mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+	mLights[2].mDirection = XMFLOAT3(-0.57735f, -0.57735f, -0.57735f);
 
 	mCamera.mPosition = XMFLOAT3(0.0f, 2.0f, -15.0f);
 }
@@ -120,15 +126,15 @@ bool TestApp::Init()
 		mBox.mVertexShader = shader;
 		mCylinder.mVertexShader = shader;
 		mSphere.mVertexShader = shader;
-		mCenterSphere.mVertexShader = shader;
 
 		// input layout
 		{
 			std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
 			{
-				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0},
-				{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA,   0},
-				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 40, D3D11_INPUT_PER_VERTEX_DATA,   0},
+				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
 			};
 
 			Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
@@ -140,8 +146,35 @@ bool TestApp::Init()
 			mBox.mInputLayout = layout;
 			mCylinder.mInputLayout = layout;
 			mSphere.mInputLayout = layout;
-			mCenterSphere.mInputLayout = layout;
 		}
+	}
+
+	// HS
+	{
+		Microsoft::WRL::ComPtr<ID3D11HullShader> shader;
+		std::wstring path = base + proj + L"HS.hlsl";
+
+		ID3DBlob* pCode;
+		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "hs_5_0", 0, 0, &pCode, nullptr));
+		HR(mDevice->CreateHullShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+
+		mGrid.mHullShader = shader;
+		mBox.mHullShader = shader;
+		mCylinder.mHullShader = shader;
+	}
+
+	// DS
+	{
+		Microsoft::WRL::ComPtr<ID3D11DomainShader> shader;
+		std::wstring path = base + proj + L"DS.hlsl";
+
+		ID3DBlob* pCode;
+		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "ds_5_0", 0, 0, &pCode, nullptr));
+		HR(mDevice->CreateDomainShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
+
+		mGrid.mDomainShader = shader;
+		mBox.mDomainShader = shader;
+		mCylinder.mDomainShader = shader;
 	}
 
 	// PS
@@ -150,12 +183,13 @@ bool TestApp::Init()
 		std::wstring path = base + proj + L"PS.hlsl";
 
 		std::vector<D3D_SHADER_MACRO> defines;
-		defines.push_back({ "ENABLE_TEXTURE",        "1" });
+		defines.push_back({ "ENABLE_TEXTURE",         "1" });
 		defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
+		defines.push_back({ "ENABLE_NORMAL_MAPPING",  "1" });
 		//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 		//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-		defines.push_back({ "ENABLE_REFLECTION",     "0" });
-		defines.push_back({ "ENABLE_FOG",            "0" });
+		defines.push_back({ "ENABLE_REFLECTION",      "0" });
+		defines.push_back({ "ENABLE_FOG",             "0" });
 		defines.push_back({ nullptr, nullptr });
 
 		ID3DBlob* pCode;
@@ -204,22 +238,25 @@ bool TestApp::Init()
 		mSkull.mVertexStart = 0;
 		mSkull.mIndexStart = 0;
 
-		mSkull.mMaterial.mAmbient = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
-		mSkull.mMaterial.mDiffuse = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
+		mSkull.mWorld = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0.0f, 1.0f, 0.0f);
+
+		mSkull.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+		mSkull.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
 		mSkull.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
-		mSkull.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+		mSkull.mMaterial.mReflect = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
 
 		// PS
 		{
 			std::wstring path = base + proj + L"PS.hlsl";
 
 			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ "ENABLE_TEXTURE",        "0" });
+			defines.push_back({ "ENABLE_TEXTURE",         "0" });
 			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
+			defines.push_back({ "ENABLE_NORMAL_MAPPING",  "0" });
 			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-			defines.push_back({ "ENABLE_REFLECTION",     "0" });
-			defines.push_back({ "ENABLE_FOG",            "0" });
+			defines.push_back({ "ENABLE_REFLECTION",      "1" });
+			defines.push_back({ "ENABLE_FOG",             "0" });
 			defines.push_back({ nullptr, nullptr });
 
 			ID3DBlob* pCode;
@@ -239,11 +276,14 @@ bool TestApp::Init()
 		mGrid.mTexTransform = XMMatrixScaling(6.0f, 8.0f, 1.0f);
 
 		mGrid.mMaterial.mAmbient = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-		mGrid.mMaterial.mDiffuse = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-		mGrid.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mGrid.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+		mGrid.mMaterial.mSpecular = XMFLOAT4(0.4f, 0.4f, 0.4f, 16.0f);
 		mGrid.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
-		CreateSRV(L"floor.dds", &mGrid.mSRV);
+		mGrid.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+
+		CreateSRV(L"stones.dds", &mGrid.mAlbedoSRV);
+		CreateSRV(L"stones_n.dds", &mGrid.mNormalSRV);
 	}
 
 	// build box geometry
@@ -253,14 +293,17 @@ bool TestApp::Init()
 		mBox.mVertexStart = mGrid.mVertexStart + mGrid.mMesh.mVertices.size();
 		mBox.mIndexStart = mGrid.mIndexStart + mGrid.mMesh.mIndices.size();
 
-		mBox.mWorld = XMMatrixScaling(3.0f, 1.0f, 3.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f); // XMMatrixMultiply(boxScale, boxOffset));
+		mBox.mWorld = XMMatrixScaling(3.0f, 1.0f, 3.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f);
 
 		mBox.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mBox.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mBox.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
 		mBox.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
-		CreateSRV(L"stone.dds", &mBox.mSRV);
+		mBox.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+
+		CreateSRV(L"floor.dds", &mBox.mAlbedoSRV);
+		CreateSRV(L"floor_n.dds", &mBox.mNormalSRV);
 	}
 
 	// build cylinder geometry
@@ -272,10 +315,13 @@ bool TestApp::Init()
 
 		mCylinder.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mCylinder.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-		mCylinder.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
+		mCylinder.mMaterial.mSpecular = XMFLOAT4(1.0f, 1.0f, 1.0f, 32.0f);
 		mCylinder.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
-		CreateSRV(L"bricks.dds", &mCylinder.mSRV);
+		mCylinder.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+
+		CreateSRV(L"bricks.dds", &mCylinder.mAlbedoSRV);
+		CreateSRV(L"bricks_n.dds", &mCylinder.mNormalSRV);
 	}
 
 	// build sphere geometry
@@ -285,8 +331,8 @@ bool TestApp::Init()
 		mSphere.mVertexStart = mCylinder.mVertexStart + mCylinder.mMesh.mVertices.size();
 		mSphere.mIndexStart = mCylinder.mIndexStart + mCylinder.mMesh.mIndices.size();
 
-		mSphere.mMaterial.mAmbient = XMFLOAT4(1, 1, 1, 1.0f);
-		mSphere.mMaterial.mDiffuse = XMFLOAT4(1, 1, 1, 1.0f);
+		mSphere.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
+		mSphere.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
 		mSphere.mMaterial.mSpecular = XMFLOAT4(0.9f, 0.9f, 0.9f, 16.0f);
 		mSphere.mMaterial.mReflect = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
 
@@ -295,20 +341,19 @@ bool TestApp::Init()
 			std::wstring path = base + proj + L"PS.hlsl";
 
 			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ "ENABLE_TEXTURE",        "1" });
+			defines.push_back({ "ENABLE_TEXTURE",         "0" });
 			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "1" });
+			defines.push_back({ "ENABLE_NORMAL_MAPPING",  "0" });
 			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-			defines.push_back({ "ENABLE_REFLECTION",     "0" });
-			defines.push_back({ "ENABLE_FOG",            "0" });
+			defines.push_back({ "ENABLE_REFLECTION",      "1" });
+			defines.push_back({ "ENABLE_FOG",             "0" });
 			defines.push_back({ nullptr, nullptr });
 
 			ID3DBlob* pCode;
 			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
 			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mSphere.mPixelShader));
 		}
-
-		mSphere.mSRV = mBox.mSRV;
 	}
 
 	// build sky geometry
@@ -321,7 +366,7 @@ bool TestApp::Init()
 		mSky.mRasterizerState = mNoCullRS;
 		mSky.mDepthStencilState = mLessEqualDSS;
 
-		CreateSRV(L"grasscube1024.dds", &mSky.mSRV);
+		CreateSRV(L"snowcube1024.dds", &mSky.mAlbedoSRV);
 
 		// VS
 		{
@@ -355,52 +400,16 @@ bool TestApp::Init()
 		}
 	}
 
-	// build center sphere geometry
-	{
-		GeometryGenerator::CreateSphere(0.5f, 3, mCenterSphere.mMesh);
-
-		mCenterSphere.mVertexStart = mSky.mVertexStart + mSky.mMesh.mVertices.size();
-		mCenterSphere.mIndexStart = mSky.mIndexStart + mSky.mMesh.mIndices.size();
-
-		mCenterSphere.mWorld = XMMatrixScaling(2, 2, 2) * XMMatrixTranslation(0, 2, 0);
-
-		mCenterSphere.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-		mCenterSphere.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-		mCenterSphere.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
-		mCenterSphere.mMaterial.mReflect = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-
-		mCenterSphere.mSRV = mBox.mSRV;
-
-		// PS
-		{
-			std::wstring path = base + proj + L"PS.hlsl";
-
-			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ "ENABLE_TEXTURE",         "1" });
-			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "1" });
-			//defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
-			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-			defines.push_back({ "ENABLE_REFLECTION",      "1" });
-			defines.push_back({ "ENABLE_FOG",             "0" });
-			defines.push_back({ nullptr, nullptr });
-
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mCenterSphere.mPixelShader));
-		}
-	}
-
 	// create vertex and input buffers
 	{
-		std::array<GameObject*, 7> objects =
+		std::array<GameObject*, 6> objects =
 		{
 			&mSkull,
 			&mGrid,
 			&mBox,
 			&mCylinder,
 			&mSphere,
-			&mSky,
-			&mCenterSphere
+			&mSky
 		};
 
 		std::vector<GeometryGenerator::Vertex> vertices;
@@ -484,6 +493,7 @@ bool TestApp::Init()
 
 		HR(mDevice->CreateSamplerState(&desc, &mSamplerState));
 
+		mContext->DSSetSamplers(0, 1, &mSamplerState);
 		mContext->PSSetSamplers(0, 1, &mSamplerState);
 	}
 
@@ -521,15 +531,6 @@ void TestApp::UpdateScene(float dt)
 	}
 
 	mCamera.UpdateView();
-
-	// update skull position
-	{
-		XMMATRIX S = XMMatrixScaling(0.2f, 0.2f, 0.2f);				// scale
-		XMMATRIX T = XMMatrixTranslation(3.0f, 2.0f, 0.0f);			// translate
-		XMMATRIX LR = XMMatrixRotationY(2.0f * mTimer.TotalTime()); // local rotate
-		XMMATRIX WR = XMMatrixRotationY(0.5f * mTimer.TotalTime()); // world rotate
-		mSkull.mWorld = S * LR * T * WR;
-	}
 }
 
 void TestApp::DrawScene()
@@ -537,57 +538,44 @@ void TestApp::DrawScene()
 	assert(mContext);
 	assert(mSwapChain);
 
-	mContext->RSSetViewports(1, &mDynamicCubeMap.mViewport);
-
-	for (UINT i = 0; i < 6; ++i)
-	{
-		mContext->ClearRenderTargetView(mDynamicCubeMap.mRTV[i], Colors::Silver);
-		mContext->ClearDepthStencilView(mDynamicCubeMap.mDSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
-
-		mContext->OMSetRenderTargets(1, &mDynamicCubeMap.mRTV[i], mDynamicCubeMap.mDSV);
-
-		DrawScene(mDynamicCubeMap.mCamera[i], false);
-	}
-
-	mContext->GenerateMips(mDynamicCubeMap.mSRV);
-
-	mContext->RSSetViewports(1, &mViewport);
-	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
+	//mContext->RSSetViewports(1, &mViewport);
+	//mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
 	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 
-	DrawScene(mCamera, true);
-
-	mSwapChain->Present(0, 0);
-}
-
-void TestApp::DrawScene(const CameraObject& camera, bool DrawCenterSphere)
-{
-	auto SetPerFrameCB = [this, &camera]() -> void
+	auto SetPerFrameCB = [this]() -> void
 	{
 		PerFrameCB buffer;
 		buffer.mLights[0] = mLights[0];
 		buffer.mLights[1] = mLights[1];
 		buffer.mLights[2] = mLights[2];
-		buffer.mEyePositionW = camera.mPosition;
+		buffer.mEyePositionW = mCamera.mPosition;
 		buffer.mFogStart = 15;
 		buffer.mFogRange = 175;
 		XMStoreFloat4(&buffer.mFogColor, Colors::Silver);
+		buffer.mHeightScale = 0.07f;
+		buffer.mMaxTessDistance = 1;
+		buffer.mMinTessDistance = 25;
+		buffer.mMinTessFactor = 1;
+		buffer.mMaxTessFactor = 5;
+		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
+		XMStoreFloat4x4(&buffer.mViewProj, V * mCamera.mProj);
 
 		mContext->UpdateSubresource(mPerFrameCB, 0, 0, &buffer, 0, 0);
 
-		//mContext->VSSetConstantBuffers(1, 1, &mPerFrameCB);
+		mContext->VSSetConstantBuffers(1, 1, &mPerFrameCB);
+		mContext->DSSetConstantBuffers(1, 1, &mPerFrameCB);
 		mContext->PSSetConstantBuffers(1, 1, &mPerFrameCB);
 	};
 
-	auto SetPerObjectCB = [this, &camera](GameObject* obj) -> void
+	auto SetPerObjectCB = [this](GameObject* obj) -> void
 	{
 		PerObjectCB buffer;
 		XMStoreFloat4x4(&buffer.mWorld, obj->mWorld);
 		XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(obj->mWorld));
-		XMMATRIX V = XMLoadFloat4x4(&camera.mView);
-		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * camera.mProj);
+		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
+		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * mCamera.mProj);
 		buffer.mMaterial = obj->mMaterial;
 		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
 
@@ -603,8 +591,8 @@ void TestApp::DrawScene(const CameraObject& camera, bool DrawCenterSphere)
 
 		// shaders
 		mContext->VSSetShader(obj->mVertexShader.Get(), nullptr, 0);
-		//mContext->HSSetShader(obj->mHullShader.Get(), nullptr, 0);
-		//mContext->DSSetShader(obj->mDomainShader.Get(), nullptr, 0);
+		mContext->HSSetShader(obj->mHullShader.Get(), nullptr, 0);
+		mContext->DSSetShader(obj->mDomainShader.Get(), nullptr, 0);
 		//mContext->GSSetShader(obj->mGeometryShader.Get(), nullptr, 0);
 		mContext->PSSetShader(obj->mPixelShader.Get(), nullptr, 0);
 
@@ -638,9 +626,11 @@ void TestApp::DrawScene(const CameraObject& camera, bool DrawCenterSphere)
 		SetPerObjectCB(obj);
 
 		// textures
-		if (obj->mSRV.Get())
+		//if (obj->mAlbedoSRV.Get())
 		{
-			mContext->PSSetShaderResources(0, 1, obj->mSRV.GetAddressOf());
+			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
+			mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+			mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
 		}
 
 		// rasterizer, blend and depth-stencil states
@@ -672,47 +662,52 @@ void TestApp::DrawScene(const CameraObject& camera, bool DrawCenterSphere)
 		}
 
 		// unbind SRV
-		ID3D11ShaderResourceView* const NullSRV = nullptr;
-		mContext->PSSetShaderResources(0, 1, &NullSRV);
+		ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
+		mContext->PSSetShaderResources(0, 2, NullSRV);
 	};
 
 	SetPerFrameCB();
 
 	// draw without reflection
-
-	DrawGameObject(&mSkull);
-	DrawGameObject(&mGrid);
-	DrawGameObject(&mBox);
-
-	for (UINT i = 0; i < 5; ++i)
 	{
-		mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
-		DrawGameObject(&mCylinder);
-		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
-		DrawGameObject(&mCylinder);
+		DrawGameObject(&mGrid);
+		DrawGameObject(&mBox);
 
-		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
-		DrawGameObject(&mSphere);
-		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
-		DrawGameObject(&mSphere);
+		for (UINT i = 0; i < 5; ++i)
+		{
+			mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
+			DrawGameObject(&mCylinder);
+			mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
+			DrawGameObject(&mCylinder);
+		}
 	}
 
+	// turn off tessellation
+
 	// draw with reflection
-
-	if (DrawCenterSphere)
 	{
-		// bind dynamic cube map SRV
-		mContext->PSSetShaderResources(1, 1, &mDynamicCubeMap.mSRV);
+		// bind cube map SRV
+		mContext->PSSetShaderResources(2, 1, mSky.mAlbedoSRV.GetAddressOf());
 
-		DrawGameObject(&mCenterSphere);
+		DrawGameObject(&mSkull);
+
+		for (UINT i = 0; i < 5; ++i)
+		{
+			mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
+			DrawGameObject(&mSphere);
+			mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
+			DrawGameObject(&mSphere);
+		}
 
 		// unbind SRV
 		ID3D11ShaderResourceView* const NullSRV = nullptr;
-		mContext->PSSetShaderResources(1, 1, &NullSRV);
+		mContext->PSSetShaderResources(2, 1, &NullSRV);
 	}
 
 	// draw sky
 	DrawGameObject(&mSky);
+
+	mSwapChain->Present(0, 0);
 }
 
 int main()

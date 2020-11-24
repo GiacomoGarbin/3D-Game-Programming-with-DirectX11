@@ -185,28 +185,31 @@ public:
 	{
 		XMFLOAT3 mPosition;
 		XMFLOAT3 mNormal;
-		XMFLOAT4 mColor;
+		XMFLOAT3 mTangent;
+		//XMFLOAT4 mColor;
 		XMFLOAT2 mTexCoord;
 
 		Vertex() {}
 
 		Vertex(float Px, float Py, float Pz,
 			   float Nx, float Ny, float Nz,
+			   float Tx, float Ty, float Tz,
 			   float Tu, float Tv) :
 			mPosition(Px, Py, Pz),
 			mNormal(Nx, Ny, Nz),
+			mTangent(Tx, Ty, Tz),
 			mTexCoord(Tu, Tv)
 		{}
 
-		Vertex(float Px, float Py, float Pz,
-			   float Nx, float Ny, float Nz,
-			   float Cr, float Cg, float Cb, // float Cr, float Cg, float Cb, float Ca,
-			   float Tu, float Tv) :
-			mPosition(Px, Py, Pz),
-			mNormal(Nx, Ny, Nz),
-			mColor(Cr, Cb, Cg, 1), // mColor(Cr, Cb, Cg, Ca),
-			mTexCoord(Tu, Tv)
-		{}
+		//Vertex(float Px, float Py, float Pz,
+		//	   float Nx, float Ny, float Nz,
+		//	   float Cr, float Cg, float Cb, // float Cr, float Cg, float Cb, float Ca,
+		//	   float Tu, float Tv) :
+		//	mPosition(Px, Py, Pz),
+		//	mNormal(Nx, Ny, Nz),
+		//	mColor(Cr, Cb, Cg, 1), // mColor(Cr, Cb, Cg, Ca),
+		//	mTexCoord(Tu, Tv)
+		//{}
 	};
 
 	struct Mesh
@@ -304,7 +307,8 @@ public:
 
 	Material mMaterial;
 
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mSRV;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mAlbedoSRV;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mNormalSRV;
 
 	Microsoft::WRL::ComPtr<ID3D11VertexShader> mVertexShader;
 	Microsoft::WRL::ComPtr<ID3D11HullShader> mHullShader;
@@ -339,7 +343,8 @@ public:
 		mIndexCount(0),
 		mWorld(XMMatrixIdentity()),
 		mTexTransform(XMMatrixIdentity()),
-		mSRV(nullptr),
+		mAlbedoSRV(nullptr),
+		mNormalSRV(nullptr),
 		mVertexShader(nullptr),
 		mHullShader(nullptr),
 		mDomainShader(nullptr),
@@ -358,7 +363,8 @@ public:
 		SafeRelease((*mVertexBuffer.GetAddressOf()));
 		SafeRelease((*mIndexBuffer.GetAddressOf()));
 		SafeRelease(mInstancedBuffer);
-		SafeRelease((*mSRV.GetAddressOf()));
+		SafeRelease((*mAlbedoSRV.GetAddressOf()));
+		SafeRelease((*mNormalSRV.GetAddressOf()));
 		SafeRelease((*mVertexShader.GetAddressOf()));
 		SafeRelease((*mGeometryShader.GetAddressOf()));
 		SafeRelease((*mPixelShader.GetAddressOf()));

@@ -604,40 +604,40 @@ void GeometryGenerator::CreateBox(float width, float height, float depth, Mesh& 
 	mesh.mVertices.resize(24);
 
 	// front
-	mesh.mVertices.at(0x00) = Vertex(-w, -h, -d, 0, 0, -1, 0, 0, 0, 0, 1);
-	mesh.mVertices.at(0x01) = Vertex(-w, +h, -d, 0, 0, -1, 0, 0, 0, 0, 0);
-	mesh.mVertices.at(0x02) = Vertex(+w, +h, -d, 0, 0, -1, 0, 0, 0, 1, 0);
-	mesh.mVertices.at(0x03) = Vertex(+w, -h, -d, 0, 0, -1, 0, 0, 0, 1, 1);
+	mesh.mVertices.at(0x00) = Vertex(-w, -h, -d, 0, 0, -1, +1, 0, 0, 0, 1);
+	mesh.mVertices.at(0x01) = Vertex(-w, +h, -d, 0, 0, -1, +1, 0, 0, 0, 0);
+	mesh.mVertices.at(0x02) = Vertex(+w, +h, -d, 0, 0, -1, +1, 0, 0, 1, 0);
+	mesh.mVertices.at(0x03) = Vertex(+w, -h, -d, 0, 0, -1, +1, 0, 0, 1, 1);
 
 	// back
-	mesh.mVertices.at(0x04) = Vertex(-w, -h, +d, 0, 0, +1, 0, 0, 0, 1, 1);
-	mesh.mVertices.at(0x05) = Vertex(+w, -h, +d, 0, 0, +1, 0, 0, 0, 0, 1);
-	mesh.mVertices.at(0x06) = Vertex(+w, +h, +d, 0, 0, +1, 0, 0, 0, 0, 0);
-	mesh.mVertices.at(0x07) = Vertex(-w, +h, +d, 0, 0, +1, 0, 0, 0, 1, 0);
+	mesh.mVertices.at(0x04) = Vertex(-w, -h, +d, 0, 0, +1, -1, 0, 0, 1, 1);
+	mesh.mVertices.at(0x05) = Vertex(+w, -h, +d, 0, 0, +1, -1, 0, 0, 0, 1);
+	mesh.mVertices.at(0x06) = Vertex(+w, +h, +d, 0, 0, +1, -1, 0, 0, 0, 0);
+	mesh.mVertices.at(0x07) = Vertex(-w, +h, +d, 0, 0, +1, -1, 0, 0, 1, 0);
 
 	// top
-	mesh.mVertices.at(0x08) = Vertex(-w, +h, -d, 0, +1, 0, 0, 0, 0, 0, 1);
-	mesh.mVertices.at(0x09) = Vertex(-w, +h, +d, 0, +1, 0, 0, 0, 0, 0, 0);
-	mesh.mVertices.at(0x0A) = Vertex(+w, +h, +d, 0, +1, 0, 0, 0, 0, 1, 0);
-	mesh.mVertices.at(0x0B) = Vertex(+w, +h, -d, 0, +1, 0, 0, 0, 0, 1, 1);
+	mesh.mVertices.at(0x08) = Vertex(-w, +h, -d, 0, +1, 0, +1, 0, 0, 0, 1);
+	mesh.mVertices.at(0x09) = Vertex(-w, +h, +d, 0, +1, 0, +1, 0, 0, 0, 0);
+	mesh.mVertices.at(0x0A) = Vertex(+w, +h, +d, 0, +1, 0, +1, 0, 0, 1, 0);
+	mesh.mVertices.at(0x0B) = Vertex(+w, +h, -d, 0, +1, 0, +1, 0, 0, 1, 1);
 
 	// bottom
-	mesh.mVertices.at(0x0C) = Vertex(-w, -h, -d, 0, -1, 0, 0, 0, 0, 1, 1);
-	mesh.mVertices.at(0x0D) = Vertex(+w, -h, -d, 0, -1, 0, 0, 0, 0, 0, 1);
-	mesh.mVertices.at(0x0E) = Vertex(+w, -h, +d, 0, -1, 0, 0, 0, 0, 0, 0);
-	mesh.mVertices.at(0x0F) = Vertex(-w, -h, +d, 0, -1, 0, 0, 0, 0, 1, 0);
+	mesh.mVertices.at(0x0C) = Vertex(-w, -h, -d, 0, -1, 0, -1, 0, 0, 1, 1);
+	mesh.mVertices.at(0x0D) = Vertex(+w, -h, -d, 0, -1, 0, -1, 0, 0, 0, 1);
+	mesh.mVertices.at(0x0E) = Vertex(+w, -h, +d, 0, -1, 0, -1, 0, 0, 0, 0);
+	mesh.mVertices.at(0x0F) = Vertex(-w, -h, +d, 0, -1, 0, -1, 0, 0, 1, 0);
 
 	// left
-	mesh.mVertices.at(0x10) = Vertex(-w, -h, +d, -1, 0, 0, 0, 0, 0, 0, 1);
-	mesh.mVertices.at(0x11) = Vertex(-w, +h, +d, -1, 0, 0, 0, 0, 0, 0, 0);
-	mesh.mVertices.at(0x12) = Vertex(-w, +h, -d, -1, 0, 0, 0, 0, 0, 1, 0);
-	mesh.mVertices.at(0x13) = Vertex(-w, -h, -d, -1, 0, 0, 0, 0, 0, 1, 1);
+	mesh.mVertices.at(0x10) = Vertex(-w, -h, +d, -1, 0, 0, 0, 0, -1, 0, 1);
+	mesh.mVertices.at(0x11) = Vertex(-w, +h, +d, -1, 0, 0, 0, 0, -1, 0, 0);
+	mesh.mVertices.at(0x12) = Vertex(-w, +h, -d, -1, 0, 0, 0, 0, -1, 1, 0);
+	mesh.mVertices.at(0x13) = Vertex(-w, -h, -d, -1, 0, 0, 0, 0, -1, 1, 1);
 
 	// right
-	mesh.mVertices.at(0x14) = Vertex(+w, -h, -d, +1, 0, 0, 0, 0, 0, 0, 1);
-	mesh.mVertices.at(0x15) = Vertex(+w, +h, -d, +1, 0, 0, 0, 0, 0, 0, 0);
-	mesh.mVertices.at(0x16) = Vertex(+w, +h, +d, +1, 0, 0, 0, 0, 0, 1, 0);
-	mesh.mVertices.at(0x17) = Vertex(+w, -h, +d, +1, 0, 0, 0, 0, 0, 1, 1);
+	mesh.mVertices.at(0x14) = Vertex(+w, -h, -d, +1, 0, 0, 0, 0, +1, 0, 1);
+	mesh.mVertices.at(0x15) = Vertex(+w, +h, -d, +1, 0, 0, 0, 0, +1, 0, 0);
+	mesh.mVertices.at(0x16) = Vertex(+w, +h, +d, +1, 0, 0, 0, 0, +1, 1, 0);
+	mesh.mVertices.at(0x17) = Vertex(+w, -h, +d, +1, 0, 0, 0, 0, +1, 1, 1);
 
 	mesh.mIndices.resize(36);
 	std::vector<UINT>& i = mesh.mIndices;
@@ -698,7 +698,8 @@ void GeometryGenerator::CreateGrid(float width, float depth, UINT m, UINT n, Mes
 
 			mesh.mVertices.at(k).mPosition = XMFLOAT3(x, 0, z);
 			mesh.mVertices.at(k).mNormal   = XMFLOAT3(0, 1, 0);
-			mesh.mVertices.at(k).mColor    = XMFLOAT4((x + HalfWidth) / width, 0, (z + HalfDepth) / depth, 1);
+			mesh.mVertices.at(k).mTangent  = XMFLOAT3(1, 0, 0);
+			//mesh.mVertices.at(k).mColor    = XMFLOAT4((x + HalfWidth) / width, 0, (z + HalfDepth) / depth, 1);
 			mesh.mVertices.at(k).mTexCoord = XMFLOAT2(j * du, i * dv);
 		}
 	}
@@ -753,8 +754,9 @@ void GeometryGenerator::CreateCylinder(float BottomRadius, float TopRadius, floa
 			XMVECTOR N = XMVector3Normalize(XMVector3Cross(T, B));
 
 			XMStoreFloat3(&vertex.mNormal, N);
+			XMStoreFloat3(&vertex.mTangent, T);
 
-			vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
+			//vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
 
 			mesh.mVertices.push_back(vertex);
 		}
@@ -803,7 +805,8 @@ void GeometryGenerator::CreateCylinder(float BottomRadius, float TopRadius, floa
 			Vertex vertex;
 			vertex.mPosition = XMFLOAT3(x, y, z);
 			vertex.mNormal = XMFLOAT3(0, type ? +1 : -1, 0);
-			vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
+			vertex.mTangent = XMFLOAT3(1, 0, 0);
+			//vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
 			vertex.mTexCoord = XMFLOAT2(u, v);
 
 			mesh.mVertices.push_back(vertex);
@@ -812,7 +815,8 @@ void GeometryGenerator::CreateCylinder(float BottomRadius, float TopRadius, floa
 		Vertex vertex;
 		vertex.mPosition = XMFLOAT3(0, y, 0);
 		vertex.mNormal = XMFLOAT3(0, type ? +1 : -1, 0);
-		vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
+		vertex.mTangent = XMFLOAT3(1, 0, 0);
+		//vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
 		vertex.mTexCoord = XMFLOAT2(0.5f, 0.5f);
 
 		mesh.mVertices.push_back(vertex);
@@ -936,14 +940,25 @@ void GeometryGenerator::CreateSphere(float radius, UINT n, Mesh& mesh)
 		XMStoreFloat3(&vertex.mPosition, P);
 		XMStoreFloat3(&vertex.mNormal, N);
 
-		vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
-
+		//vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
 
 		// frank luna
 		{
-			float t = GameMath::GetAngle2(XMFLOAT2(vertex.mPosition.x, vertex.mPosition.z)); // theta
-			float p = std::acos(vertex.mPosition.y / radius); // phi
-			vertex.mTexCoord = XMFLOAT2(t / XM_2PI, p / XM_PI);
+			// theta & phi
+			float t = GameMath::GetAngle2(XMFLOAT2(vertex.mPosition.x, vertex.mPosition.z));
+			float p = std::acos(vertex.mPosition.y / radius);
+
+			// texture coordinates
+			vertex.mTexCoord.x = t / XM_2PI;
+			vertex.mTexCoord.y = p / XM_PI;
+
+			// tangent
+			vertex.mTangent.x = -radius * std::sin(p) * std::sin(t);
+			vertex.mTangent.y = 0;
+			vertex.mTangent.z = +radius * std::sin(p) * std::cos(t);
+
+			XMVECTOR T = XMLoadFloat3(&vertex.mTangent);
+			XMStoreFloat3(&vertex.mTangent, XMVector3Normalize(T));
 		}
 
 		// wikipedia : texture mapping
@@ -952,9 +967,8 @@ void GeometryGenerator::CreateSphere(float radius, UINT n, Mesh& mesh)
 			XMFLOAT3 d;
 			XMStoreFloat3(&d, D);
 
-			float u = 0.5f + std::atan2(d.x, d.z) / XM_2PI;
-			float v = 0.5f - std::asin(d.y) / XM_PI;
-			vertex.mTexCoord = XMFLOAT2(u, v);
+			vertex.mTexCoord.x = 0.5f + std::atan2(d.x, d.z) / XM_2PI;
+			vertex.mTexCoord.y = 0.5f - std::asin(d.y) / XM_PI;
 		}
 	}
 }
@@ -994,7 +1008,7 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 			ss >> vertex.mPosition.x >> vertex.mPosition.y >> vertex.mPosition.z;
 			ss >> vertex.mNormal.x >> vertex.mNormal.y >> vertex.mNormal.z;
 
-			vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
+			//vertex.mColor = XMFLOAT4((vertex.mNormal.x + 1) * 0.5f, (vertex.mNormal.y + 1) * 0.5f, (vertex.mNormal.z + 1) * 0.5f, 1);
 
 			mesh.mVertices.push_back(vertex);
 
@@ -1040,10 +1054,10 @@ void GeometryGenerator::CreateScreenQuad(Mesh& mesh)
 
 	v.resize(4);
 
-	v.at(0) = Vertex(-1, -1, 0,   0, 0, -1,   0, 1);
-	v.at(1) = Vertex(-1, +1, 0,   0, 0, -1,   0, 0);
-	v.at(2) = Vertex(+1, +1, 0,   0, 0, -1,   1, 0);
-	v.at(3) = Vertex(+1, -1, 0,   0, 0, -1,   1, 1);
+	v.at(0) = Vertex(-1, -1, 0,   0, 0, -1,   1, 0, 0,   0, 1);
+	v.at(1) = Vertex(-1, +1, 0,   0, 0, -1,   1, 0, 0,   0, 0);
+	v.at(2) = Vertex(+1, +1, 0,   0, 0, -1,   1, 0, 0,   1, 0);
+	v.at(3) = Vertex(+1, -1, 0,   0, 0, -1,   1, 0, 0,   1, 1);
 
 	i.resize(6);
 
