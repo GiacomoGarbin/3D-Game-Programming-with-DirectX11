@@ -267,13 +267,13 @@ bool TestApp::Init()
 
 	// build grid geometry
 	{
-		GeometryGenerator::CreateGrid(20, 30, 60, 40, mGrid.mMesh);
+		GeometryGenerator::CreateGrid(20, 30, 50, 40, mGrid.mMesh);
 
 		mGrid.mVertexStart = mSkull.mVertexStart + mSkull.mMesh.mVertices.size();
 		mGrid.mIndexStart = mSkull.mIndexStart + mSkull.mMesh.mIndices.size();
 
 		mGrid.mWorld = XMMatrixIdentity();
-		mGrid.mTexTransform = XMMatrixScaling(6.0f, 8.0f, 1.0f);
+		mGrid.mTexTransform = XMMatrixScaling(8, 10, 1);
 
 		mGrid.mMaterial.mAmbient = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
 		mGrid.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -294,6 +294,7 @@ bool TestApp::Init()
 		mBox.mIndexStart = mGrid.mIndexStart + mGrid.mMesh.mIndices.size();
 
 		mBox.mWorld = XMMatrixScaling(3.0f, 1.0f, 3.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f);
+		mBox.mTexTransform = XMMatrixScaling(2, 1, 1);
 
 		mBox.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mBox.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -308,10 +309,12 @@ bool TestApp::Init()
 
 	// build cylinder geometry
 	{
-		GeometryGenerator::CreateCylinder(0.5f, 0.3f, 3, 20, 20, mCylinder.mMesh);
+		GeometryGenerator::CreateCylinder(0.5f, 0.5f, 3, 15, 15, mCylinder.mMesh);
 
 		mCylinder.mVertexStart = mBox.mVertexStart + mBox.mMesh.mVertices.size();
 		mCylinder.mIndexStart = mBox.mIndexStart + mBox.mMesh.mIndices.size();
+
+		mCylinder.mTexTransform = XMMatrixScaling(1, 2, 1);
 
 		mCylinder.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mCylinder.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
