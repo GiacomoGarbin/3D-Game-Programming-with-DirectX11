@@ -1696,3 +1696,119 @@ void DynamicCubeMap::Init(ID3D11Device* device, const XMFLOAT3& P)
 }
 
 //void DynamicCubeMap::Draw() {}
+
+ShadowMap::ShadowMap() :
+	mWidth(0),
+	mHeight(0),
+	mDSV(nullptr),
+	mSRV(nullptr)
+{}
+
+ShadowMap::~ShadowMap()
+{
+	SafeRelease(mDSV);
+	SafeRelease(mSRV);
+}
+void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
+{
+	mWidth = width;
+	mHeight = height;
+
+	mViewport.TopLeftX = 0;
+	mViewport.TopLeftY = 0;
+	mViewport.Width = width;
+	mViewport.Height = height;
+	mViewport.MinDepth = 0;
+	mViewport.MaxDepth = 1;
+
+	D3D11_TEXTURE2D_DESC desc;
+	desc.Width = mWidth;
+	desc.Height = mHeight;
+	desc.MipLevels = 1;
+	desc.ArraySize = 1;
+	desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+	desc.Usage = D3D11_USAGE_DEFAULT;
+	desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+	desc.CPUAccessFlags = 0;
+	desc.MiscFlags = 0;
+
+	ID3D11Texture2D* texture = nullptr;
+	HR(device->CreateTexture2D(&desc, nullptr, &texture));
+
+	// DSV
+	{
+		D3D11_DEPTH_STENCIL_VIEW_DESC desc;
+		desc.Flags = 0;
+		desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+		desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+		desc.Texture2D.MipSlice = 0;
+
+		HR(device->CreateDepthStencilView(texture, &desc, &mDSV));
+	}
+
+	// SRV
+	{
+		D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+		desc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+		desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		desc.Texture2D.MipLevels = 1;
+		desc.Texture2D.MostDetailedMip = 0;
+
+		HR(device->CreateShaderResourceView(texture, &desc, &mSRV));
+	}
+
+	SafeRelease(texture);
+}
+
+ID3D11ShaderResourceView* ShadowMap::GetSRV()
+{
+	return mSRV;
+}
+
+void ShadowMap::BindDSVAndSetNullRenderTarget(ID3D11DeviceContext* context)
+{
+	context->RSSetViewports(1, &mViewport);
+	context->OMSetRenderTargets(1, nullptr, mDSV);
+	context->ClearDepthStencilView(mDSV, D3D11_CLEAR_DEPTH, 1, 0);
+}
+
+void ShadowMap::BuildTranform(const XMFLOAT3& light, const BoundingSphere& bounds)
+{
+	XMVECTOR dir = XMLoadFloat3(&light);
+	XMVECTOR pos = -2 * bounds.Radius * dir;
+	XMVECTOR target = XMLoadFloat3(&bounds.Center);
+	XMVECTOR up = XMVectorSet(0, 1, 0, 0);
+
+	// light space transform
+	XMMATRIX V = XMMatrixLookAtLH(pos, target, up);
+
+	// transform bounding sphere to light space
+	XMFLOAT3 SphereCenterLS;
+	XMStoreFloat3(&SphereCenterLS, XMVector3TransformCoord(target, V));
+
+	// ortho frustum in light space encloses bounds
+	float l = SphereCenterLS.x - bounds.Radius;
+	float b = SphereCenterLS.y - bounds.Radius;
+	float n = SphereCenterLS.z - bounds.Radius;
+	float r = SphereCenterLS.x + bounds.Radius;
+	float t = SphereCenterLS.y + bounds.Radius;
+	float f = SphereCenterLS.z + bounds.Radius;
+	XMMATRIX P = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
+
+	// transform NDC space [-1,+1]^2 to texture space [0,1]^2
+	XMMATRIX T
+	(
+		+0.5f,  0.0f, 0.0f, 0.0f,
+		 0.0f, -0.5f, 0.0f, 0.0f,
+		 0.0f,  0.0f, 1.0f, 0.0f,
+		+0.5f, +0.5f, 0.0f, 1.0f
+	);
+
+	XMMATRIX S = V * P * T;
+
+	XMStoreFloat4x4(&mLightView, V);
+	XMStoreFloat4x4(&mLightProj, P);
+	XMStoreFloat4x4(&mShadowTransform, S);
+}

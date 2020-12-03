@@ -61,10 +61,18 @@ public:
 	GameObject mSky;
 
 	std::array<LightDirectional, 3> mLights;
+	XMFLOAT3 mLightsCache[3];
+	float mLightAngle;
 
 	ID3D11SamplerState* mSamplerState;
 
 	DynamicCubeMap mDynamicCubeMap;
+
+	BoundingSphere mSceneBounds;
+
+	ShadowMap mShadowMap;
+
+	void DrawSceneToShadowMap();
 };
 
 TestApp::TestApp() :
@@ -73,26 +81,33 @@ TestApp::TestApp() :
 	mPerObjectCB(nullptr),
 	mSamplerState(nullptr)
 {
-	mMainWindowTitle = "Ch18 Normal Mapping and Displacement Mapping";
+	mMainWindowTitle = "Ch21 Shadow Mapping";
 
 	//m4xMSAAEnabled = true;
 
 	mLights[0].mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
 	mLights[0].mDiffuse = XMFLOAT4(0.7f, 0.7f, 0.6f, 1.0f);
 	mLights[0].mSpecular = XMFLOAT4(0.8f, 0.8f, 0.7f, 1.0f);
-	mLights[0].mDirection = XMFLOAT3(0.707f, 0.0f, 0.707f);
+	mLights[0].mDirection = XMFLOAT3(-0.57735f, -0.57735f, -0.57735f);
 
 	mLights[1].mAmbient = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 	mLights[1].mDiffuse = XMFLOAT4(0.40f, 0.40f, 0.40f, 1.0f);
 	mLights[1].mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[1].mDirection = XMFLOAT3(0.0f, -0.707f, 0.707f);
+	mLights[1].mDirection = XMFLOAT3(-0.707f, 0.707f, 0.0f);
 
 	mLights[2].mAmbient = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 	mLights[2].mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
 	mLights[2].mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[2].mDirection = XMFLOAT3(-0.57735f, -0.57735f, -0.57735f);
+	mLights[2].mDirection = XMFLOAT3(0.0f, 0.0, -1.0f);
 
-	mCamera.mPosition = XMFLOAT3(0.0f, 2.0f, -15.0f);
+	for (UINT i = 0; i < 3; ++i) mLightsCache[i] = mLights[i].mDirection;
+
+	mCamera.mPosition = XMFLOAT3(0, 2, -15);
+
+	mSceneBounds.Center = XMFLOAT3(0, 0, 0);
+	mSceneBounds.Radius = std::sqrt(10 * 10 + 15 * 15);
+
+	mShadowMap.Init(mDevice, 2048, 2048);
 }
 
 TestApp::~TestApp()
@@ -369,7 +384,7 @@ bool TestApp::Init()
 		mSky.mRasterizerState = mNoCullRS;
 		mSky.mDepthStencilState = mLessEqualDSS;
 
-		CreateSRV(L"snowcube1024.dds", &mSky.mAlbedoSRV);
+		CreateSRV(L"desertcube1024.dds", &mSky.mAlbedoSRV);
 
 		// VS
 		{
@@ -533,13 +548,42 @@ void TestApp::UpdateScene(float dt)
 		mCamera.strafe(+10 * dt);
 	}
 
+	mLightAngle += 0.1f * dt;
+
+	XMMATRIX R = XMMatrixRotationY(mLightAngle);
+
+	for (UINT i = 0; i < 3; ++i)
+	{
+		XMVECTOR D = XMLoadFloat3(&mLightsCache[i]);
+		D = XMVector3TransformNormal(D, R);
+		XMStoreFloat3(&mLights[i].mDirection, D);
+	}
+
+	// build shadow transform
+	mShadowMap.BuildTranform(mLights[0].mDirection, mSceneBounds);
+
 	mCamera.UpdateView();
+}
+
+void TestApp::DrawSceneToShadowMap()
+{
+	XMMATRIX view = XMLoadFloat4x4(&mShadowMap.mLightView);
+	XMMATRIX proj = XMLoadFloat4x4(&mShadowMap.mLightProj);
+	XMMATRIX ViewProj = XMMatrixMultiply(view, proj);
 }
 
 void TestApp::DrawScene()
 {
 	assert(mContext);
 	assert(mSwapChain);
+
+	// bind shadow map dsv and set null render target
+
+	// draw scene to shadow map
+
+	// restore rasterazer state
+
+	// restore back and depth buffer
 
 	//mContext->RSSetViewports(1, &mViewport);
 	//mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
@@ -706,6 +750,8 @@ void TestApp::DrawScene()
 		ID3D11ShaderResourceView* const NullSRV = nullptr;
 		mContext->PSSetShaderResources(2, 1, &NullSRV);
 	}
+
+	// draw debug shadow map quad
 
 	// draw sky
 	DrawGameObject(&mSky);

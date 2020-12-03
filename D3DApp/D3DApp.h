@@ -482,4 +482,31 @@ public:
 	//void Draw();
 };
 
+class ShadowMap
+{
+	UINT mWidth;
+	UINT mHeight;
+
+	ID3D11DepthStencilView* mDSV;
+	ID3D11ShaderResourceView* mSRV;
+
+	D3D11_VIEWPORT mViewport;
+
+public:
+	ShadowMap();
+	~ShadowMap();
+
+	void Init(ID3D11Device* device, UINT width, UINT height);
+
+	ID3D11ShaderResourceView* GetSRV();
+
+	void BindDSVAndSetNullRenderTarget(ID3D11DeviceContext* context);
+
+	XMFLOAT4X4 mLightView;
+	XMFLOAT4X4 mLightProj;
+	XMFLOAT4X4 mShadowTransform;
+
+	void BuildTranform(const XMFLOAT3& light, const BoundingSphere& bounds);
+};
+
 #endif // D3DAPP_H
