@@ -41,6 +41,9 @@
     <FxCompile Include="VS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="ShadowMapVS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\D3DApp\D3DApp.h">

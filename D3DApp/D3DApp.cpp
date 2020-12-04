@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cassert>
 #include <vector>
+//#include <cstdlib>
 
 GameTimer::GameTimer() :
 	mSecondsPerCount(0),
@@ -534,6 +535,9 @@ void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view
 {
 	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
 	std::wstring path = base + name;
+
+	//if (const char* env_p = std::getenv_s("PATH"))
+	//	std::cout << "Your PATH is: " << env_p << '\n';
 
 	ID3D11Resource* resource = nullptr;
 
@@ -1710,6 +1714,8 @@ ShadowMap::~ShadowMap()
 	SafeRelease(mDSV);
 	SafeRelease(mSRV);
 	SafeRelease(mPerObjectCB);
+	SafeRelease(mVertexShader);
+	SafeRelease(mInputLayout);
 }
 void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 {
@@ -1777,6 +1783,26 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 
 		HR(device->CreateBuffer(&desc, nullptr, &mPerObjectCB));
 	}
+
+	// VS
+	{
+		std::wstring path = L"ShadowMapVS.hlsl";
+
+		ID3DBlob* pCode;
+		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+		HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mVertexShader));
+
+		// input layout
+		{
+			std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+			{
+				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			};
+
+			HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mInputLayout));
+		}
+	}
 }
 
 ID3D11ShaderResourceView* ShadowMap::GetSRV()
@@ -1787,7 +1813,10 @@ ID3D11ShaderResourceView* ShadowMap::GetSRV()
 void ShadowMap::BindDSVAndSetNullRenderTarget(ID3D11DeviceContext* context)
 {
 	context->RSSetViewports(1, &mViewport);
-	context->OMSetRenderTargets(1, nullptr, mDSV);
+
+	ID3D11RenderTargetView* NullRTV[1] = { nullptr };
+	context->OMSetRenderTargets(1, NullRTV, mDSV);
+
 	context->ClearDepthStencilView(mDSV, D3D11_CLEAR_DEPTH, 1, 0);
 }
 
@@ -1828,4 +1857,15 @@ void ShadowMap::BuildTranform(const XMFLOAT3& light, const BoundingSphere& bound
 	XMStoreFloat4x4(&mLightView, V);
 	XMStoreFloat4x4(&mLightProj, P);
 	XMStoreFloat4x4(&mShadowTransform, S);
+}
+
+
+ID3D11VertexShader* ShadowMap::GetVS()
+{
+	return mVertexShader;
+}
+
+ID3D11InputLayout* ShadowMap::GetIL()
+{
+	return mInputLayout;
 }

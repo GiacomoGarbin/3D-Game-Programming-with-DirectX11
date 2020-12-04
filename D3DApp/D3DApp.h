@@ -19,6 +19,8 @@
 #include <DirectXCollision.h>
 using namespace DirectX;
 
+#include <d3dcompiler.h>
+
 #include <DDSTextureLoader.h>
 
 #include <wrl/client.h>
@@ -494,6 +496,9 @@ class ShadowMap
 
 	ID3D11Buffer* mPerObjectCB;
 
+	ID3D11VertexShader* mVertexShader;
+	ID3D11InputLayout* mInputLayout;
+
 public:
 	ShadowMap();
 	~ShadowMap();
@@ -515,6 +520,9 @@ public:
 		XMFLOAT4X4 mWorldViewProj;
 		XMFLOAT4X4 mTexTransform;
 	};
+
+	ID3D11VertexShader* GetVS();
+	ID3D11InputLayout* GetIL();
 };
 
 #endif // D3DAPP_H

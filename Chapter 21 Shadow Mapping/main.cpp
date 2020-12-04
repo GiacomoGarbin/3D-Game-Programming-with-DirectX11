@@ -5,8 +5,6 @@
 #include <array>
 #include <sstream>
 
-#include <d3dcompiler.h>
-
 class TestApp : public D3DApp
 {
 public:
@@ -576,6 +574,110 @@ void TestApp::DrawSceneToShadowMap()
 		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
 		mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
 	};
+
+	auto DrawGameObject = [this, &SetPerObjectCB](GameObject* obj) -> void
+	{
+		FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+
+		// shaders
+		mContext->VSSetShader(mShadowMap.GetVS(), nullptr, 0);
+		mContext->PSSetShader(nullptr, nullptr, 0);
+
+		// input layout
+		mContext->IASetInputLayout(mShadowMap.GetIL());
+
+		// primitive topology
+		mContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		// vertex and index buffers
+		if (obj->mInstancedBuffer)
+		{
+			UINT stride[2] = { sizeof(GeometryGenerator::Vertex), sizeof(GameObject::InstancedData) };
+			UINT offset[2] = { 0, 0 };
+
+			ID3D11Buffer* vbs[2] = { obj->mVertexBuffer.Get(), obj->mInstancedBuffer };
+
+			mContext->IASetVertexBuffers(0, 2, vbs, stride, offset);
+			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+		else
+		{
+			UINT stride = sizeof(GeometryGenerator::Vertex);
+			UINT offset = 0;
+
+			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
+			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+
+		//  per object constant buffer
+		SetPerObjectCB(obj);
+
+		// textures
+		{
+			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
+			//mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+			//mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+		}
+
+		// rasterizer, blend and depth-stencil states
+
+		mContext->RSSetState(obj->mRasterizerState.Get());
+
+		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+		mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+
+		// draw call
+		if (obj->mIndexBuffer && obj->mInstancedBuffer)
+		{
+			mContext->DrawIndexedInstanced(obj->mMesh.mIndices.size(), obj->mVisibleInstanceCount, 0, 0, 0);
+		}
+		else if (obj->mIndexBuffer)
+		{
+			mContext->DrawIndexed(obj->mMesh.mIndices.size(), obj->mIndexStart, obj->mVertexStart);
+		}
+		else
+		{
+			mContext->Draw(obj->mMesh.mVertices.size(), obj->mVertexStart);
+		}
+
+		// unbind SRV
+		ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
+		mContext->PSSetShaderResources(0, 2, NullSRV);
+	};
+
+	// draw without reflection
+	{
+		DrawGameObject(&mGrid);
+		DrawGameObject(&mBox);
+
+		for (UINT i = 0; i < 5; ++i)
+		{
+			mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
+			DrawGameObject(&mCylinder);
+			mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
+			DrawGameObject(&mCylinder);
+		}
+	}
+
+	// draw with reflection
+	{
+		// bind cube map SRV
+		mContext->PSSetShaderResources(2, 1, mSky.mAlbedoSRV.GetAddressOf());
+
+		DrawGameObject(&mSkull);
+
+		for (UINT i = 0; i < 5; ++i)
+		{
+			mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
+			DrawGameObject(&mSphere);
+			mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
+			DrawGameObject(&mSphere);
+		}
+
+		// unbind SRV
+		ID3D11ShaderResourceView* const NullSRV = nullptr;
+		mContext->PSSetShaderResources(2, 1, &NullSRV);
+	}
 }
 
 void TestApp::DrawScene()
@@ -589,9 +691,9 @@ void TestApp::DrawScene()
 	// draw scene to shadow map
 	DrawSceneToShadowMap();
 
-	// restore rasterazer state
+	// restore rasterazer state -> no need for this, DrawGameObject sets the rasterazer state for each object
 
-	// restore back and depth buffer
+	// restore back and depth buffers
 	mContext->RSSetViewports(1, &mViewport);
 	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
 
