@@ -571,7 +571,7 @@ void TestApp::DrawSceneToShadowMap()
 		ShadowMap::PerObjectCB buffer;
 		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * ViewProj);
 		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
-		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
+		mContext->UpdateSubresource(mPerObjectCB, 0, nullptr, &buffer, 0, 0);
 		mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
 	};
 
@@ -620,9 +620,7 @@ void TestApp::DrawSceneToShadowMap()
 		}
 
 		// rasterizer, blend and depth-stencil states
-
-		mContext->RSSetState(obj->mRasterizerState.Get());
-
+		mContext->RSSetState(mShadowMap.GetRS());
 		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
 		mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
 

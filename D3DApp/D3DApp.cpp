@@ -533,7 +533,7 @@ float D3DApp::AspectRatio() const
 
 void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view)
 {
-	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+	std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
 	std::wstring path = base + name;
 
 	//if (const char* env_p = std::getenv_s("PATH"))
@@ -990,7 +990,7 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 
 	std::ifstream ifs;
 
-	ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
+	ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
 
 	std::string line;
 
@@ -1706,7 +1706,8 @@ ShadowMap::ShadowMap() :
 	mHeight(0),
 	mDSV(nullptr),
 	mSRV(nullptr),
-	mPerObjectCB(nullptr)
+	mPerObjectCB(nullptr),
+	mRasterizerState(nullptr)
 {}
 
 ShadowMap::~ShadowMap()
@@ -1716,6 +1717,7 @@ ShadowMap::~ShadowMap()
 	SafeRelease(mPerObjectCB);
 	SafeRelease(mVertexShader);
 	SafeRelease(mInputLayout);
+	SafeRelease(mRasterizerState);
 }
 void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 {
@@ -1803,6 +1805,23 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 			HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mInputLayout));
 		}
 	}
+
+	// rasterizer state
+	{
+		D3D11_RASTERIZER_DESC desc;
+		desc.FillMode = D3D11_FILL_SOLID;
+		desc.CullMode = D3D11_CULL_BACK;
+		desc.FrontCounterClockwise = false;
+		desc.DepthBias = 100000;
+		desc.DepthBiasClamp = 0;
+		desc.SlopeScaledDepthBias = 1;
+		desc.DepthClipEnable = true;
+		desc.ScissorEnable = false;
+		desc.MultisampleEnable = false;
+		desc.AntialiasedLineEnable = false;
+
+		HR(device->CreateRasterizerState(&desc, &mRasterizerState));
+	}
 }
 
 ID3D11ShaderResourceView* ShadowMap::GetSRV()
@@ -1814,8 +1833,9 @@ void ShadowMap::BindDSVAndSetNullRenderTarget(ID3D11DeviceContext* context)
 {
 	context->RSSetViewports(1, &mViewport);
 
-	ID3D11RenderTargetView* NullRTV[1] = { nullptr };
-	context->OMSetRenderTargets(1, NullRTV, mDSV);
+	//ID3D11RenderTargetView* NullRTV[1] = { nullptr };
+	//context->OMSetRenderTargets(1, NullRTV, mDSV);
+	context->OMSetRenderTargets(0, nullptr, mDSV);
 
 	context->ClearDepthStencilView(mDSV, D3D11_CLEAR_DEPTH, 1, 0);
 }
@@ -1859,7 +1879,6 @@ void ShadowMap::BuildTranform(const XMFLOAT3& light, const BoundingSphere& bound
 	XMStoreFloat4x4(&mShadowTransform, S);
 }
 
-
 ID3D11VertexShader* ShadowMap::GetVS()
 {
 	return mVertexShader;
@@ -1868,4 +1887,9 @@ ID3D11VertexShader* ShadowMap::GetVS()
 ID3D11InputLayout* ShadowMap::GetIL()
 {
 	return mInputLayout;
+}
+
+ID3D11RasterizerState* ShadowMap::GetRS()
+{
+	return mRasterizerState;
 }

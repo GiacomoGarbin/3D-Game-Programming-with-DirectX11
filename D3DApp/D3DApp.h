@@ -499,6 +499,8 @@ class ShadowMap
 	ID3D11VertexShader* mVertexShader;
 	ID3D11InputLayout* mInputLayout;
 
+	ID3D11RasterizerState* mRasterizerState;
+
 public:
 	ShadowMap();
 	~ShadowMap();
@@ -523,6 +525,7 @@ public:
 
 	ID3D11VertexShader* GetVS();
 	ID3D11InputLayout* GetIL();
+	ID3D11RasterizerState* GetRS();
 };
 
 #endif // D3DAPP_H
