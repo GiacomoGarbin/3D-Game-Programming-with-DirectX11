@@ -492,6 +492,8 @@ class ShadowMap
 
 	D3D11_VIEWPORT mViewport;
 
+	ID3D11Buffer* mPerObjectCB;
+
 public:
 	ShadowMap();
 	~ShadowMap();
@@ -507,6 +509,12 @@ public:
 	XMFLOAT4X4 mShadowTransform;
 
 	void BuildTranform(const XMFLOAT3& light, const BoundingSphere& bounds);
+
+	struct PerObjectCB
+	{
+		XMFLOAT4X4 mWorldViewProj;
+		XMFLOAT4X4 mTexTransform;
+	};
 };
 
 #endif // D3DAPP_H

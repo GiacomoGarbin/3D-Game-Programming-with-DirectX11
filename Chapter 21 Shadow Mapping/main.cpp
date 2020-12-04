@@ -66,8 +66,6 @@ public:
 
 	ID3D11SamplerState* mSamplerState;
 
-	DynamicCubeMap mDynamicCubeMap;
-
 	BoundingSphere mSceneBounds;
 
 	ShadowMap mShadowMap;
@@ -106,8 +104,6 @@ TestApp::TestApp() :
 
 	mSceneBounds.Center = XMFLOAT3(0, 0, 0);
 	mSceneBounds.Radius = std::sqrt(10 * 10 + 15 * 15);
-
-	mShadowMap.Init(mDevice, 2048, 2048);
 }
 
 TestApp::~TestApp()
@@ -124,8 +120,11 @@ bool TestApp::Init()
 		return false;
 	}
 
-	std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/";
-	std::wstring proj = L"Chapter 21 Shadow Mapping/";
+	//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/";
+	//std::wstring proj = L"Chapter 21 Shadow Mapping/";
+
+	std::wstring base = L"";
+	std::wstring proj = L"";
 
 	// VS
 	{
@@ -400,7 +399,6 @@ bool TestApp::Init()
 				{
 					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				};
-
 				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mSky.mInputLayout));
 			}
 		}
@@ -515,8 +513,7 @@ bool TestApp::Init()
 		mContext->PSSetSamplers(0, 1, &mSamplerState);
 	}
 
-	XMFLOAT3 CenterSpherePosition = XMFLOAT3(0.0f, 2.0f, 0.0f);
-	mDynamicCubeMap.Init(mDevice, CenterSpherePosition);
+	mShadowMap.Init(mDevice, 2048, 2048);
 
 	return true;
 }
@@ -570,6 +567,15 @@ void TestApp::DrawSceneToShadowMap()
 	XMMATRIX view = XMLoadFloat4x4(&mShadowMap.mLightView);
 	XMMATRIX proj = XMLoadFloat4x4(&mShadowMap.mLightProj);
 	XMMATRIX ViewProj = XMMatrixMultiply(view, proj);
+
+	auto SetPerObjectCB = [this, &ViewProj](GameObject* obj) -> void
+	{
+		ShadowMap::PerObjectCB buffer;
+		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * ViewProj);
+		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
+		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
+		mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
+	};
 }
 
 void TestApp::DrawScene()
@@ -578,15 +584,16 @@ void TestApp::DrawScene()
 	assert(mSwapChain);
 
 	// bind shadow map dsv and set null render target
+	mShadowMap.BindDSVAndSetNullRenderTarget(mContext);
 
 	// draw scene to shadow map
+	DrawSceneToShadowMap();
 
 	// restore rasterazer state
 
 	// restore back and depth buffer
-
-	//mContext->RSSetViewports(1, &mViewport);
-	//mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
+	mContext->RSSetViewports(1, &mViewport);
+	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
 	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);

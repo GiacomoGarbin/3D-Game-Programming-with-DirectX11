@@ -1701,13 +1701,15 @@ ShadowMap::ShadowMap() :
 	mWidth(0),
 	mHeight(0),
 	mDSV(nullptr),
-	mSRV(nullptr)
+	mSRV(nullptr),
+	mPerObjectCB(nullptr)
 {}
 
 ShadowMap::~ShadowMap()
 {
 	SafeRelease(mDSV);
 	SafeRelease(mSRV);
+	SafeRelease(mPerObjectCB);
 }
 void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 {
@@ -1760,6 +1762,21 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 	}
 
 	SafeRelease(texture);
+
+	// build shadow map constant buffer
+	{
+		static_assert((sizeof(PerObjectCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(PerObjectCB);
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		HR(device->CreateBuffer(&desc, nullptr, &mPerObjectCB));
+	}
 }
 
 ID3D11ShaderResourceView* ShadowMap::GetSRV()
