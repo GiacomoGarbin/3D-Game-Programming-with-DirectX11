@@ -501,11 +501,20 @@ class ShadowMap
 
 	ID3D11RasterizerState* mRasterizerState;
 
+	GameObject mDebugQuad;
+	ID3D11Buffer* mDebugQuadCB;
+	//ID3D11SamplerState* mDebugSamplerState;
+
+	struct DebugQuadCB
+	{
+		XMFLOAT4X4 mWorldViewProj;
+	};
+
 public:
 	ShadowMap();
 	~ShadowMap();
 
-	void Init(ID3D11Device* device, UINT width, UINT height);
+	void Init(ID3D11Device* device, UINT width, UINT height, float AspectRatio);
 
 	ID3D11ShaderResourceView* GetSRV();
 
@@ -526,6 +535,10 @@ public:
 	ID3D11VertexShader* GetVS();
 	ID3D11InputLayout* GetIL();
 	ID3D11RasterizerState* GetRS();
+
+	void DrawDebugQuad(ID3D11DeviceContext* context);
+
+	void ResizeDebugQuad(float AspectRatio);
 };
 
 #endif // D3DAPP_H

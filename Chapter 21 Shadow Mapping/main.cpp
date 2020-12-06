@@ -511,7 +511,7 @@ bool TestApp::Init()
 		mContext->PSSetSamplers(0, 1, &mSamplerState);
 	}
 
-	mShadowMap.Init(mDevice, 2048, 2048);
+	mShadowMap.Init(mDevice, 2048, 2048, AspectRatio());
 
 	return true;
 }
@@ -519,6 +519,8 @@ bool TestApp::Init()
 void TestApp::OnResize(GLFWwindow* window, int width, int height)
 {
 	D3DApp::OnResize(window, width, height);
+
+	mShadowMap.ResizeDebugQuad(AspectRatio());
 }
 
 void TestApp::UpdateScene(float dt)
@@ -779,8 +781,7 @@ void TestApp::DrawScene()
 		// constant buffer per object
 		SetPerObjectCB(obj);
 
-		// textures
-		//if (obj->mAlbedoSRV.Get())
+		// bind SRVs
 		{
 			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
 			mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
@@ -815,7 +816,7 @@ void TestApp::DrawScene()
 			mContext->Draw(obj->mMesh.mVertices.size(), obj->mVertexStart);
 		}
 
-		// unbind SRV
+		// unbind SRVs
 		ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
 		mContext->PSSetShaderResources(0, 2, NullSRV);
 	};
@@ -858,7 +859,10 @@ void TestApp::DrawScene()
 		mContext->PSSetShaderResources(2, 1, &NullSRV);
 	}
 
-	// draw debug shadow map quad
+	if (IsKeyPressed(GLFW_KEY_2))
+	{
+		mShadowMap.DrawDebugQuad(mContext);
+	}
 
 	// draw sky
 	DrawGameObject(&mSky);

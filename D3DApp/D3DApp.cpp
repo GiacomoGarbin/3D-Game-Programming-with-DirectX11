@@ -533,7 +533,8 @@ float D3DApp::AspectRatio() const
 
 void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view)
 {
-	std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+	//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
 	std::wstring path = base + name;
 
 	//if (const char* env_p = std::getenv_s("PATH"))
@@ -990,7 +991,8 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 
 	std::ifstream ifs;
 
-	ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
+	//ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
+	ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
 
 	std::string line;
 
@@ -1719,7 +1721,7 @@ ShadowMap::~ShadowMap()
 	SafeRelease(mInputLayout);
 	SafeRelease(mRasterizerState);
 }
-void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
+void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height, float AspectRatio)
 {
 	mWidth = width;
 	mHeight = height;
@@ -1822,6 +1824,97 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 
 		HR(device->CreateRasterizerState(&desc, &mRasterizerState));
 	}
+
+	// debug quad
+	{
+		GeometryGenerator::CreateScreenQuad(mDebugQuad.mMesh);
+
+		// vertex buffer
+		{
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mDebugQuad.mMesh.mVertices.size();
+			desc.Usage = D3D11_USAGE_IMMUTABLE;
+			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			D3D11_SUBRESOURCE_DATA InitData;
+			InitData.pSysMem = mDebugQuad.mMesh.mVertices.data();
+			InitData.SysMemPitch = 0;
+			InitData.SysMemSlicePitch = 0;
+
+			HR(device->CreateBuffer(&desc, &InitData, &mDebugQuad.mVertexBuffer));
+		}
+
+		// input buffer
+		{
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(UINT) * mDebugQuad.mMesh.mIndices.size();
+			desc.Usage = D3D11_USAGE_IMMUTABLE;
+			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			D3D11_SUBRESOURCE_DATA InitData;
+			InitData.pSysMem = mDebugQuad.mMesh.mIndices.data();
+			InitData.SysMemPitch = 0;
+			InitData.SysMemSlicePitch = 0;
+
+			HR(device->CreateBuffer(&desc, &InitData, &mDebugQuad.mIndexBuffer));
+		}
+
+		// vertex shader
+		{
+			std::wstring path = L"DebugQuadVS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mDebugQuad.mVertexShader));
+
+			// input layout
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				};
+				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mDebugQuad.mInputLayout));
+			}
+		}
+
+		// pixel shader
+		{
+			std::wstring path = L"DebugQuadPS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mDebugQuad.mPixelShader));
+		}
+
+		// constant buffer
+		{
+			static_assert((sizeof(DebugQuadCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(DebugQuadCB);
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			HR(device->CreateBuffer(&desc, nullptr, &mDebugQuadCB));
+		}
+
+		ResizeDebugQuad(AspectRatio);
+
+		mDebugQuad.mAlbedoSRV = mSRV;
+	}
 }
 
 ID3D11ShaderResourceView* ShadowMap::GetSRV()
@@ -1892,4 +1985,53 @@ ID3D11InputLayout* ShadowMap::GetIL()
 ID3D11RasterizerState* ShadowMap::GetRS()
 {
 	return mRasterizerState;
+}
+
+void ShadowMap::DrawDebugQuad(ID3D11DeviceContext* context)
+{
+	// shaders
+	context->VSSetShader(mDebugQuad.mVertexShader.Get(), nullptr, 0);
+	context->PSSetShader(mDebugQuad.mPixelShader.Get(), nullptr, 0);
+
+	// input layout
+	context->IASetInputLayout(mDebugQuad.mInputLayout.Get());
+
+	// primitive topology
+	context->IASetPrimitiveTopology(mDebugQuad.mPrimitiveTopology);
+
+	// vertex and index buffers
+	UINT stride = sizeof(GeometryGenerator::Vertex);
+	UINT offset = 0;
+	context->IASetVertexBuffers(0, 1, mDebugQuad.mVertexBuffer.GetAddressOf(), &stride, &offset);
+	context->IASetIndexBuffer(mDebugQuad.mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+	// constant buffer per object
+	{
+		ShadowMap::DebugQuadCB buffer;
+		XMStoreFloat4x4(&buffer.mWorldViewProj, mDebugQuad.mWorld);
+		context->UpdateSubresource(mDebugQuadCB, 0, nullptr, &buffer, 0, 0);
+		context->VSSetConstantBuffers(0, 1, &mDebugQuadCB);
+	}
+
+	// rasterizer, blend and depth-stencil states
+	context->RSSetState(mDebugQuad.mRasterizerState.Get());
+	FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+	context->OMSetBlendState(mDebugQuad.mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+	context->OMSetDepthStencilState(mDebugQuad.mDepthStencilState.Get(), mDebugQuad.mStencilRef);
+	
+	// bind SRV
+	context->PSSetShaderResources(0, 1, mDebugQuad.mAlbedoSRV.GetAddressOf());
+
+	// draw call
+	context->DrawIndexed(mDebugQuad.mMesh.mIndices.size(), mDebugQuad.mIndexStart, mDebugQuad.mVertexStart);
+
+	// unbind SRV
+	ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
+	context->PSSetShaderResources(0, 1, NullSRV);
+}
+
+void ShadowMap::ResizeDebugQuad(float AspectRatio)
+{
+	float w = 0.5f / AspectRatio;
+	mDebugQuad.mWorld = XMMatrixScaling(w, 0.5f, 1.0f) * XMMatrixTranslation(1 - w, -0.5f, 0.0f);
 }
