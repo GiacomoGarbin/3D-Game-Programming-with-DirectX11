@@ -89,7 +89,7 @@ struct VertexOut
 	float3 NormalW   : NORMAL;
 	float3 TangentW  : TANGENT;
 	float2 TexCoord  : TEXCOORD0;
-	float2 ShadowH   : TEXCOORD1;
+	float4 ShadowH   : TEXCOORD1;
 	float TessFactor : TESSFACTOR;
 };
 
@@ -99,10 +99,10 @@ VertexOut main(VertexIn vin)
 
 	vout.PositionW = mul(gWorld, float4(vin.PositionL, 1)).xyz;
 	vout.PositionH = mul(gWorldViewProj, float4(vin.PositionL, 1));
-	vout.NormalW = mul((float3x3)gWorldInverseTranspose, vin.NormalL);
-	vout.TangentW = mul((float3x3)gWorld, vin.TangentL);
-	vout.TexCoord = mul(gTexCoordTransform, float4(vin.TexCoord, 0, 1)).xy;
-	vout.ShadowH = mul(gShadowTransform, float4(vin.PositionL, 1));
+	vout.NormalW   = mul((float3x3)gWorldInverseTranspose, vin.NormalL);
+	vout.TangentW  = mul((float3x3)gWorld, vin.TangentL);
+	vout.TexCoord  = mul(gTexCoordTransform, float4(vin.TexCoord, 0, 1)).xy;
+	vout.ShadowH   = mul(gShadowTransform, float4(vin.PositionL, 1));
 
 	float d = distance(vout.PositionW, gEyePositionW);
 	float f = saturate((gMinTessDistance - d) / (gMinTessDistance - gMaxTessDistance));

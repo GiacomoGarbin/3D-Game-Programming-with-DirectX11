@@ -46,7 +46,8 @@ public:
 		XMFLOAT4X4 mWorldInverseTranspose;
 		XMFLOAT4X4 mWorldViewProj;
 		GameObject::Material mMaterial;
-		XMFLOAT4X4 mTexTransform;
+		XMFLOAT4X4 mTexCoordTransform;
+		XMFLOAT4X4 mShadowTransform;
 	};
 
 	ID3D11Buffer* mPerObjectCB;
@@ -285,7 +286,7 @@ bool TestApp::Init()
 		mGrid.mIndexStart = mSkull.mIndexStart + mSkull.mMesh.mIndices.size();
 
 		mGrid.mWorld = XMMatrixIdentity();
-		mGrid.mTexTransform = XMMatrixScaling(8, 10, 1);
+		mGrid.mTexCoordTransform = XMMatrixScaling(8, 10, 1);
 
 		mGrid.mMaterial.mAmbient = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
 		mGrid.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -306,7 +307,7 @@ bool TestApp::Init()
 		mBox.mIndexStart = mGrid.mIndexStart + mGrid.mMesh.mIndices.size();
 
 		mBox.mWorld = XMMatrixScaling(3.0f, 1.0f, 3.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f);
-		mBox.mTexTransform = XMMatrixScaling(2, 1, 1);
+		mBox.mTexCoordTransform = XMMatrixScaling(2, 1, 1);
 
 		mBox.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mBox.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -326,7 +327,7 @@ bool TestApp::Init()
 		mCylinder.mVertexStart = mBox.mVertexStart + mBox.mMesh.mVertices.size();
 		mCylinder.mIndexStart = mBox.mIndexStart + mBox.mMesh.mIndices.size();
 
-		mCylinder.mTexTransform = XMMatrixScaling(1, 2, 1);
+		mCylinder.mTexCoordTransform = XMMatrixScaling(1, 2, 1);
 
 		mCylinder.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mCylinder.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -512,6 +513,7 @@ bool TestApp::Init()
 	}
 
 	mShadowMap.Init(mDevice, 2048, 2048, AspectRatio());
+	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
 	mContext->PSSetSamplers(1, 1, &mShadowMap.GetSS());
 
 	return true;
@@ -573,7 +575,7 @@ void TestApp::DrawSceneToShadowMap()
 	{
 		ShadowMap::PerObjectCB buffer;
 		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * ViewProj);
-		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
+		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexCoordTransform);
 		mContext->UpdateSubresource(mPerObjectCB, 0, nullptr, &buffer, 0, 0);
 		mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
 	};
@@ -686,6 +688,10 @@ void TestApp::DrawScene()
 	assert(mContext);
 	assert(mSwapChain);
 
+	// unbind shadow map as SRV
+	ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
+	mContext->PSSetShaderResources(3, 1, NullSRV);
+
 	// bind shadow map dsv and set null render target
 	mShadowMap.BindDSVAndSetNullRenderTarget(mContext);
 
@@ -700,6 +706,9 @@ void TestApp::DrawScene()
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
 	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+
+	// bind shadow map as SRV
+	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
 
 	auto SetPerFrameCB = [this]() -> void
 	{
@@ -734,7 +743,9 @@ void TestApp::DrawScene()
 		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
 		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * mCamera.mProj);
 		buffer.mMaterial = obj->mMaterial;
-		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
+		XMStoreFloat4x4(&buffer.mTexCoordTransform, obj->mTexCoordTransform);
+		XMMATRIX S = XMLoadFloat4x4(&mShadowMap.mShadowTransform);
+		XMStoreFloat4x4(&buffer.mShadowTransform, obj->mWorld * S);
 
 		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
 

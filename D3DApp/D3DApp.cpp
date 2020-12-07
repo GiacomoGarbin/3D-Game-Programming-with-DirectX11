@@ -533,8 +533,8 @@ float D3DApp::AspectRatio() const
 
 void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view)
 {
-	//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
-	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+	std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+	//std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
 	std::wstring path = base + name;
 
 	//if (const char* env_p = std::getenv_s("PATH"))
@@ -991,8 +991,8 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 
 	std::ifstream ifs;
 
-	//ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
-	ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
+	ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
+	//ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
 
 	std::string line;
 
@@ -1710,7 +1710,8 @@ ShadowMap::ShadowMap() :
 	mSRV(nullptr),
 	mPerObjectCB(nullptr),
 	mRasterizerState(nullptr),
-	mDebugQuadCB(nullptr)
+	mDebugQuadCB(nullptr),
+	mSamplerState(nullptr)
 {}
 
 ShadowMap::~ShadowMap()
@@ -1722,6 +1723,7 @@ ShadowMap::~ShadowMap()
 	SafeRelease(mInputLayout);
 	SafeRelease(mRasterizerState);
 	SafeRelease(mDebugQuadCB);
+	SafeRelease(mSamplerState);
 }
 void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height, float AspectRatio)
 {
@@ -1936,7 +1938,7 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height, float Aspect
 	}
 }
 
-ID3D11ShaderResourceView* ShadowMap::GetSRV()
+ID3D11ShaderResourceView*& ShadowMap::GetSRV()
 {
 	return mSRV;
 }

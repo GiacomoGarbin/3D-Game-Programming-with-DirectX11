@@ -295,7 +295,7 @@ public:
 	UINT mIndexCount;
 
 	XMMATRIX mWorld;
-	XMMATRIX mTexTransform;
+	XMMATRIX mTexCoordTransform;
 
 	struct Material
 	{
@@ -344,7 +344,7 @@ public:
 		mIndexStart(0),
 		mIndexCount(0),
 		mWorld(XMMatrixIdentity()),
-		mTexTransform(XMMatrixIdentity()),
+		mTexCoordTransform(XMMatrixIdentity()),
 		mAlbedoSRV(nullptr),
 		mNormalSRV(nullptr),
 		mVertexShader(nullptr),
@@ -517,7 +517,7 @@ public:
 
 	void Init(ID3D11Device* device, UINT width, UINT height, float AspectRatio);
 
-	ID3D11ShaderResourceView* GetSRV();
+	ID3D11ShaderResourceView*& GetSRV();
 
 	void BindDSVAndSetNullRenderTarget(ID3D11DeviceContext* context);
 

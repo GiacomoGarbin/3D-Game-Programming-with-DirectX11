@@ -48,7 +48,8 @@ cbuffer cbPerObject : register(b0)
 	float4x4 gWorldInverseTranspose;
 	float4x4 gWorldViewProj;
 	Material gMaterial;
-	float4x4 gTexTransform;
+	float4x4 gTexCoordTransform;
+	float4x4 gShadowTransform;
 };
 
 cbuffer cbPerFrame : register(b1)
@@ -76,9 +77,10 @@ cbuffer cbPerFrame : register(b1)
 Texture2D gAlbedoTexture : register(t0);
 Texture2D gNormalTexture : register(t1);
 TextureCube gCubeMap : register(t2);
+Texture2D gShadowTexture : register(t3);
 
 SamplerState gLinearSamplerState : register(s0);
-SamplerState gShadowSamplerState : register(s1);
+SamplerComparisonState gShadowSamplerState : register(s1);
 
 struct DomainOut
 {
@@ -96,7 +98,7 @@ struct VertexOut
 	float3 NormalW   : NORMAL;
 	float3 TangentW  : TANGENT;
 	float2 TexCoord  : TEXCOORD0;
-	float2 ShadowH   : TEXCOORD1;
+	float4 ShadowH   : TEXCOORD1;
 	float TessFactor : TESSFACTOR;
 };
 
@@ -234,6 +236,38 @@ float3 NormalFromTangentToWorld(float3 NormalS, float3 NormalW, float3 TangentW)
 	return mul(NormalT, TBN);
 }
 
+float GetShadowFactor(float4 ShadowH)
+{
+	static const float ShadowMapSize  = 2048;
+	static const float ShadowMapDelta = 1.0f / ShadowMapSize;
+
+	// complete projection by doing division by w
+	ShadowH.xyz /= ShadowH.w;
+
+	// depth in NDC space
+	float depth = ShadowH.z;
+
+	// texel size
+	const float dx = ShadowMapDelta;
+
+	const float2 offsets[9] =
+	{
+		float2(-dx, -dx), float2(0, -dx), float2(dx, -dx),
+		float2(-dx,   0), float2(0,   0), float2(dx,   0),
+		float2(-dx, +dx), float2(0, +dx), float2(dx, +dx)
+	};
+
+	float light = 0;
+
+	[unroll]
+	for (int i = 0; i < 9; ++i)
+	{
+		light += gShadowTexture.SampleCmpLevelZero(gShadowSamplerState, ShadowH.xy + offsets[i], depth).r;
+	}
+
+	return light / 9.0f;
+}
+
 //float4 main(DomainOut pin) : SV_TARGET
 float4 main(VertexOut pin) : SV_TARGET
 {
@@ -279,15 +313,19 @@ float4 main(VertexOut pin) : SV_TARGET
 		float4 diffuse = float4(0, 0, 0, 0);
 		float4 specular = float4(0, 0, 0, 0);
 
+		// only the first light casts a shadow
+		float3 shadow = float3(1, 1, 1);
+		shadow[0] = GetShadowFactor(pin.ShadowH);
+
 		[unroll]
 		for (int i = 0; i < 3; ++i)
 		{
 			float4 a, d, s;
 
 			ComputeLightDirectional(gMaterial, gLights[i], pin.NormalW, E, a, d, s);
-			ambient += a;
-			diffuse += d;
-			specular += s;
+			ambient  += a;
+			diffuse  += d * shadow[i];
+			specular += s * shadow[i];
 		}
 
 		color = TextureColor * (ambient + diffuse) + specular;
