@@ -292,7 +292,7 @@ bool TestApp::Init()
 		mGrid.mMaterial.mSpecular = XMFLOAT4(0.4f, 0.4f, 0.4f, 16.0f);
 		mGrid.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
-		mGrid.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+		//mGrid.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
 		CreateSRV(L"stones.dds", &mGrid.mAlbedoSRV);
 		CreateSRV(L"stones_n.dds", &mGrid.mNormalSRV);
@@ -313,7 +313,7 @@ bool TestApp::Init()
 		mBox.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
 		mBox.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
-		mBox.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+		//mBox.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
 		CreateSRV(L"floor.dds", &mBox.mAlbedoSRV);
 		CreateSRV(L"floor_n.dds", &mBox.mNormalSRV);
@@ -333,7 +333,7 @@ bool TestApp::Init()
 		mCylinder.mMaterial.mSpecular = XMFLOAT4(1.0f, 1.0f, 1.0f, 32.0f);
 		mCylinder.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
-		mCylinder.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+		//mCylinder.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
 		CreateSRV(L"bricks.dds", &mCylinder.mAlbedoSRV);
 		CreateSRV(L"bricks_n.dds", &mCylinder.mNormalSRV);
@@ -512,6 +512,7 @@ bool TestApp::Init()
 	}
 
 	mShadowMap.Init(mDevice, 2048, 2048, AspectRatio());
+	mContext->PSSetSamplers(1, 1, &mShadowMap.GetSS());
 
 	return true;
 }
@@ -747,8 +748,8 @@ void TestApp::DrawScene()
 
 		// shaders
 		mContext->VSSetShader(obj->mVertexShader.Get(), nullptr, 0);
-		mContext->HSSetShader(obj->mHullShader.Get(), nullptr, 0);
-		mContext->DSSetShader(obj->mDomainShader.Get(), nullptr, 0);
+		//mContext->HSSetShader(obj->mHullShader.Get(), nullptr, 0);
+		//mContext->DSSetShader(obj->mDomainShader.Get(), nullptr, 0);
 		//mContext->GSSetShader(obj->mGeometryShader.Get(), nullptr, 0);
 		mContext->PSSetShader(obj->mPixelShader.Get(), nullptr, 0);
 

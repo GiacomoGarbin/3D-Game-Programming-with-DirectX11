@@ -500,11 +500,12 @@ class ShadowMap
 	ID3D11InputLayout* mInputLayout;
 
 	ID3D11RasterizerState* mRasterizerState;
+	
+	ID3D11SamplerState* mSamplerState;
 
 	GameObject mDebugQuad;
 	ID3D11Buffer* mDebugQuadCB;
-	//ID3D11SamplerState* mDebugSamplerState;
-
+	
 	struct DebugQuadCB
 	{
 		XMFLOAT4X4 mWorldViewProj;
@@ -535,6 +536,7 @@ public:
 	ID3D11VertexShader* GetVS();
 	ID3D11InputLayout* GetIL();
 	ID3D11RasterizerState* GetRS();
+	ID3D11SamplerState*& GetSS(); // return reference to pointer
 
 	void DrawDebugQuad(ID3D11DeviceContext* context);
 

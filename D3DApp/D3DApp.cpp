@@ -1709,7 +1709,8 @@ ShadowMap::ShadowMap() :
 	mDSV(nullptr),
 	mSRV(nullptr),
 	mPerObjectCB(nullptr),
-	mRasterizerState(nullptr)
+	mRasterizerState(nullptr),
+	mDebugQuadCB(nullptr)
 {}
 
 ShadowMap::~ShadowMap()
@@ -1720,6 +1721,7 @@ ShadowMap::~ShadowMap()
 	SafeRelease(mVertexShader);
 	SafeRelease(mInputLayout);
 	SafeRelease(mRasterizerState);
+	SafeRelease(mDebugQuadCB);
 }
 void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height, float AspectRatio)
 {
@@ -1915,6 +1917,23 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height, float Aspect
 
 		mDebugQuad.mAlbedoSRV = mSRV;
 	}
+
+	// sampler state
+	{
+		D3D11_SAMPLER_DESC desc;
+		desc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+		desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+		desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+		desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+		desc.MipLODBias = 0;
+		desc.MaxAnisotropy = 1;
+		desc.ComparisonFunc = D3D11_COMPARISON_LESS;
+		ZeroMemory(desc.BorderColor, sizeof(desc.BorderColor));
+		desc.MinLOD = 0;
+		desc.MaxLOD = 0;
+
+		HR(device->CreateSamplerState(&desc, &mSamplerState));
+	}
 }
 
 ID3D11ShaderResourceView* ShadowMap::GetSRV()
@@ -1985,6 +2004,11 @@ ID3D11InputLayout* ShadowMap::GetIL()
 ID3D11RasterizerState* ShadowMap::GetRS()
 {
 	return mRasterizerState;
+}
+
+ID3D11SamplerState*& ShadowMap::GetSS()
+{
+	return mSamplerState;
 }
 
 void ShadowMap::DrawDebugQuad(ID3D11DeviceContext* context)

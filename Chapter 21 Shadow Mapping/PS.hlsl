@@ -76,7 +76,9 @@ cbuffer cbPerFrame : register(b1)
 Texture2D gAlbedoTexture : register(t0);
 Texture2D gNormalTexture : register(t1);
 TextureCube gCubeMap : register(t2);
-SamplerState gSamplerState;
+
+SamplerState gLinearSamplerState : register(s0);
+SamplerState gShadowSamplerState : register(s1);
 
 struct DomainOut
 {
@@ -85,6 +87,17 @@ struct DomainOut
 	float3 NormalW   : NORMAL;
 	float3 TangentW  : TANGENT;
 	float2 TexCoord  : TEXCOORD;
+};
+
+struct VertexOut
+{
+	float3 PositionW : POSITION;
+	float4 PositionH : SV_POSITION;
+	float3 NormalW   : NORMAL;
+	float3 TangentW  : TANGENT;
+	float2 TexCoord  : TEXCOORD0;
+	float2 ShadowH   : TEXCOORD1;
+	float TessFactor : TESSFACTOR;
 };
 
 void ComputeLightDirectional(
@@ -221,7 +234,8 @@ float3 NormalFromTangentToWorld(float3 NormalS, float3 NormalW, float3 TangentW)
 	return mul(NormalT, TBN);
 }
 
-float4 main(DomainOut pin) : SV_TARGET
+//float4 main(DomainOut pin) : SV_TARGET
+float4 main(VertexOut pin) : SV_TARGET
 {
 	pin.NormalW = normalize(pin.NormalW); // interpolated normals can be unnormalized
 
@@ -244,7 +258,7 @@ float4 main(DomainOut pin) : SV_TARGET
 	float4 TextureColor = float4(1, 1, 1, 1);
 
 #if ENABLE_TEXTURE
-	TextureColor = gAlbedoTexture.Sample(gSamplerState, pin.TexCoord);
+	TextureColor = gAlbedoTexture.Sample(gLinearSamplerState, pin.TexCoord);
 
 	// if alpha clipping
 	{
@@ -253,7 +267,7 @@ float4 main(DomainOut pin) : SV_TARGET
 #endif // ENABLE_TEXTURE
 
 #if ENABLE_NORMAL_MAPPING
-	float3 N = gNormalTexture.Sample(gSamplerState, pin.TexCoord).rgb;
+	float3 N = gNormalTexture.Sample(gLinearSamplerState, pin.TexCoord).rgb;
 	pin.NormalW = NormalFromTangentToWorld(N, pin.NormalW, pin.TangentW);
 #endif // ENABLE_NORMAL_MAPPING
 
@@ -281,7 +295,7 @@ float4 main(DomainOut pin) : SV_TARGET
 #if ENABLE_REFLECTION
 		float3 ReflectVec = reflect(-E, pin.NormalW);
 		//float3 RefractVec = refract(-E, pin.NormalW, 1);
-		float4 ReflectCol = gCubeMap.Sample(gSamplerState, ReflectVec);
+		float4 ReflectCol = gCubeMap.Sample(gLinearSamplerState, ReflectVec);
 		color += gMaterial.reflect * ReflectCol;
 #endif // ENABLE_REFLECTION
 

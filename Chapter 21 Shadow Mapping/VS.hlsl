@@ -48,7 +48,8 @@ cbuffer cbPerObject : register(b0)
 	float4x4 gWorldInverseTranspose;
 	float4x4 gWorldViewProj;
 	Material gMaterial;
-	float4x4 gTexTransform;
+	float4x4 gTexCoordTransform;
+	float4x4 gShadowTransform;
 };
 
 cbuffer cbPerFrame : register(b1)
@@ -87,7 +88,8 @@ struct VertexOut
 	float4 PositionH : SV_POSITION;
 	float3 NormalW   : NORMAL;
 	float3 TangentW  : TANGENT;
-	float2 TexCoord  : TEXCOORD;
+	float2 TexCoord  : TEXCOORD0;
+	float2 ShadowH   : TEXCOORD1;
 	float TessFactor : TESSFACTOR;
 };
 
@@ -99,7 +101,8 @@ VertexOut main(VertexIn vin)
 	vout.PositionH = mul(gWorldViewProj, float4(vin.PositionL, 1));
 	vout.NormalW = mul((float3x3)gWorldInverseTranspose, vin.NormalL);
 	vout.TangentW = mul((float3x3)gWorld, vin.TangentL);
-	vout.TexCoord = mul(gTexTransform, float4(vin.TexCoord, 0, 1)).xy;
+	vout.TexCoord = mul(gTexCoordTransform, float4(vin.TexCoord, 0, 1)).xy;
+	vout.ShadowH = mul(gShadowTransform, float4(vin.PositionL, 1));
 
 	float d = distance(vout.PositionW, gEyePositionW);
 	float f = saturate((gMinTessDistance - d) / (gMinTessDistance - gMaxTessDistance));
