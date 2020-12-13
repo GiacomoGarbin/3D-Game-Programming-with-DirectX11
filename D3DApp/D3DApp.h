@@ -276,7 +276,11 @@ class GameMath
 {
 public:
 	static float GetAngle2(XMFLOAT2 P);
+	
+	// random float in [0, 1)
 	static float RandNorm() { return (float)rand() / (float)RAND_MAX; }
+
+	// random float in [a, b)
 	static float RandNorm(float a, float b) { return a + (b - a) * RandNorm(); }
 
 	static XMMATRIX InverseTranspose(XMMATRIX M);
@@ -484,6 +488,36 @@ public:
 	//void Draw();
 };
 
+class DebugQuad : public GameObject
+{
+public:
+	enum ScreenCorner
+	{
+		TopLeft,
+		TopRight,
+		BottomLeft,
+		BottomRight
+	};
+
+	DebugQuad();
+	~DebugQuad();
+
+	void Init(ID3D11Device* device, float WindowAspectRatio, ScreenCorner position, float TextureAspectRatio);
+	void OnResize(float AspectRatio);
+	void Draw(ID3D11DeviceContext* context, ID3D11ShaderResourceView* srv);
+
+private:
+	ScreenCorner mPosition;
+	float mAspectRatio;
+
+	ID3D11Buffer* mDebugQuadCB;
+
+	struct DebugQuadCB
+	{
+		XMFLOAT4X4 mWorldViewProj;
+	};
+};
+
 class ShadowMap
 {
 	UINT mWidth;
@@ -503,21 +537,11 @@ class ShadowMap
 	
 	ID3D11SamplerState* mSamplerState;
 
-	GameObject mDebugQuad;
-	ID3D11Buffer* mDebugQuadCB;
-	
-	struct DebugQuadCB
-	{
-		XMFLOAT4X4 mWorldViewProj;
-	};
-
 public:
 	ShadowMap();
 	~ShadowMap();
 
-	void Init(ID3D11Device* device, UINT width, UINT height, float AspectRatio);
-
-	ID3D11ShaderResourceView*& GetSRV();
+	void Init(ID3D11Device* device, UINT width, UINT height);
 
 	void BindDSVAndSetNullRenderTarget(ID3D11DeviceContext* context);
 
@@ -537,10 +561,81 @@ public:
 	ID3D11InputLayout* GetIL();
 	ID3D11RasterizerState* GetRS();
 	ID3D11SamplerState*& GetSS(); // return reference to pointer
+	ID3D11ShaderResourceView*& GetSRV();
+	ID3D11Buffer*& GetCB();
 
-	void DrawDebugQuad(ID3D11DeviceContext* context);
+	DebugQuad mDebugQuad;
+};
 
-	void ResizeDebugQuad(float AspectRatio);
+class SSAO
+{
+	UINT mWidth;
+	UINT mHeight;
+
+	ID3D11RenderTargetView* mNormalDepthRTV;
+	ID3D11ShaderResourceView* mNormalDepthSRV;
+	ID3D11VertexShader* mNormalDepthVS;
+	ID3D11InputLayout* mNormalDepthIL;
+	ID3D11PixelShader* mNormalDepthPS;
+	ID3D11Buffer* mNormalDepthCB;
+	ID3D11SamplerState* mNormalDepthSS;
+
+	ID3D11ShaderResourceView* mRandomVectorSRV;
+	ID3D11SamplerState* mRandomVectorSS;
+	XMFLOAT4 mFrustumFarCorner[4];
+	XMFLOAT4 mSampleOffset[14];
+
+	ID3D11RenderTargetView* mAmbientMapRTV[2];
+	ID3D11ShaderResourceView* mAmbientMapSRV[2];
+	D3D11_VIEWPORT mAmbientMapViewport;
+	GameObject mAmbientMapQuad;
+	ID3D11Buffer* mAmbientMapComputeCB;
+
+public:
+	SSAO();
+	~SSAO();
+
+	void Init(ID3D11Device* device, UINT width, UINT height, float FieldOfViewY, float FarZ);
+	void OnResize(ID3D11Device* device, UINT width, UINT height, float FieldOfViewY, float FarZ);
+
+	void BindNormalDepthRenderTarget(ID3D11DeviceContext* context, ID3D11DepthStencilView* dsv);
+
+	void ComputeAmbientMap(ID3D11DeviceContext* context, const CameraObject& camera);
+	void BlurAmbientMap(UINT count);
+
+	struct NormalDepthCB
+	{
+		XMFLOAT4X4 WorldView;
+		XMFLOAT4X4 WorldViewProj;
+		XMFLOAT4X4 WorldInverseTransposeView;
+		XMFLOAT4X4 TexCoordTransform;
+	};
+
+	static_assert((sizeof(NormalDepthCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+	struct AmbientMapComputeCB
+	{
+		XMFLOAT4X4 ProjTexture;
+		XMFLOAT4 SampleOffset[14];
+		XMFLOAT4 FrustumFarCorner[4];
+
+		// coordinates given in view space
+		float OcclusionRadius;
+		float OcclusionFadeStart;
+		float OcclusionFadeEnd;
+		float SurfaceEpsilon;
+	};
+
+	static_assert((sizeof(AmbientMapComputeCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+	ID3D11Buffer*& GetNormalDepthCB();
+	ID3D11VertexShader* GetNormalDepthVS();
+	ID3D11InputLayout* GetNormalDepthIL();
+	ID3D11PixelShader* GetNormalDepthPS();
+
+	ID3D11ShaderResourceView*& GetAmbientMapSRV();
+
+	DebugQuad mDebugQuad;
 };
 
 #endif // D3DAPP_H

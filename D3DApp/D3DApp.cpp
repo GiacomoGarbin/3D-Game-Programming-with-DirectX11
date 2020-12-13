@@ -5,6 +5,8 @@
 #include <vector>
 //#include <cstdlib>
 
+#include <directxpackedvector.h>
+
 GameTimer::GameTimer() :
 	mSecondsPerCount(0),
 	mDeltaTime(-1),
@@ -533,8 +535,8 @@ float D3DApp::AspectRatio() const
 
 void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view)
 {
-	std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
-	//std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+	//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
 	std::wstring path = base + name;
 
 	//if (const char* env_p = std::getenv_s("PATH"))
@@ -991,8 +993,8 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 
 	std::ifstream ifs;
 
-	ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
-	//ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
+	//ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
+	ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
 
 	std::string line;
 
@@ -1703,6 +1705,177 @@ void DynamicCubeMap::Init(ID3D11Device* device, const XMFLOAT3& P)
 
 //void DynamicCubeMap::Draw() {}
 
+
+DebugQuad::DebugQuad() :
+	mDebugQuadCB(nullptr)
+{}
+
+DebugQuad::~DebugQuad()
+{
+	SafeRelease(mDebugQuadCB);
+}
+
+void DebugQuad::Init(ID3D11Device* device, float WindowAspectRatio, ScreenCorner position, float TextureAspectRatio)
+{
+	GeometryGenerator::CreateScreenQuad(mMesh);
+
+	// vertex buffer
+	{
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mMesh.mVertices.size();
+		desc.Usage = D3D11_USAGE_IMMUTABLE;
+		desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		D3D11_SUBRESOURCE_DATA InitData;
+		InitData.pSysMem = mMesh.mVertices.data();
+		InitData.SysMemPitch = 0;
+		InitData.SysMemSlicePitch = 0;
+
+		HR(device->CreateBuffer(&desc, &InitData, &mVertexBuffer));
+	}
+
+	// input buffer
+	{
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(UINT) * mMesh.mIndices.size();
+		desc.Usage = D3D11_USAGE_IMMUTABLE;
+		desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		D3D11_SUBRESOURCE_DATA InitData;
+		InitData.pSysMem = mMesh.mIndices.data();
+		InitData.SysMemPitch = 0;
+		InitData.SysMemSlicePitch = 0;
+
+		HR(device->CreateBuffer(&desc, &InitData, &mIndexBuffer));
+	}
+
+	// vertex shader
+	{
+		std::wstring path = L"DebugQuadVS.hlsl";
+
+		ID3DBlob* pCode;
+		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+		HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mVertexShader));
+
+		// input layout
+		{
+			std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+			{
+				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			};
+			HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mInputLayout));
+		}
+	}
+
+	// pixel shader
+	{
+		std::wstring path = L"DebugQuadPS.hlsl";
+
+		std::vector<D3D_SHADER_MACRO> defines;
+		defines.push_back({ nullptr, nullptr });
+
+		ID3DBlob* pCode;
+		HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+		HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mPixelShader));
+	}
+
+	// constant buffer
+	{
+		static_assert((sizeof(DebugQuadCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(DebugQuadCB);
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		HR(device->CreateBuffer(&desc, nullptr, &mDebugQuadCB));
+	}
+
+	mPosition = position;
+	mAspectRatio = TextureAspectRatio;
+
+	OnResize(WindowAspectRatio);
+}
+
+void DebugQuad::OnResize(float WindowAspectRatio)
+{
+	float w = (0.5f / WindowAspectRatio) * mAspectRatio;
+
+	XMMATRIX S = XMMatrixScaling(w, 0.5f, 1.0f);
+	XMMATRIX T;
+
+	switch (mPosition)
+	{
+		case TopLeft:
+			T = XMMatrixTranslation(-1 + w, +0.5f, 0.0f);
+			break;
+		case TopRight:
+			T = XMMatrixTranslation(+1 - w, +0.5f, 0.0f);
+			break;
+		case BottomLeft:
+			T = XMMatrixTranslation(-1 + w, -0.5f, 0.0f);
+			break;
+		case BottomRight:
+			T = XMMatrixTranslation(+1 - w, -0.5f, 0.0f);
+			break;
+	}
+
+	mWorld = S * T;
+}
+
+void DebugQuad::Draw(ID3D11DeviceContext* context, ID3D11ShaderResourceView* srv)
+{
+	// shaders
+	context->VSSetShader(mVertexShader.Get(), nullptr, 0);
+	context->PSSetShader(mPixelShader.Get(), nullptr, 0);
+
+	// input layout
+	context->IASetInputLayout(mInputLayout.Get());
+
+	// primitive topology
+	context->IASetPrimitiveTopology(mPrimitiveTopology);
+
+	// vertex and index buffers
+	UINT stride = sizeof(GeometryGenerator::Vertex);
+	UINT offset = 0;
+	context->IASetVertexBuffers(0, 1, mVertexBuffer.GetAddressOf(), &stride, &offset);
+	context->IASetIndexBuffer(mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+	// constant buffer per object
+	{
+		DebugQuadCB buffer;
+		XMStoreFloat4x4(&buffer.mWorldViewProj, mWorld);
+		context->UpdateSubresource(mDebugQuadCB, 0, nullptr, &buffer, 0, 0);
+		context->VSSetConstantBuffers(0, 1, &mDebugQuadCB);
+	}
+
+	// rasterizer, blend and depth-stencil states
+	context->RSSetState(mRasterizerState.Get());
+	FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+	context->OMSetBlendState(mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+	context->OMSetDepthStencilState(mDepthStencilState.Get(), mStencilRef);
+
+	// bind SRV
+	context->PSSetShaderResources(0, 1, &srv);
+
+	// draw call
+	context->DrawIndexed(mMesh.mIndices.size(), mIndexStart, mVertexStart);
+
+	// unbind SRV
+	ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
+	context->PSSetShaderResources(0, 1, NullSRV);
+}
+
 ShadowMap::ShadowMap() :
 	mWidth(0),
 	mHeight(0),
@@ -1710,7 +1883,6 @@ ShadowMap::ShadowMap() :
 	mSRV(nullptr),
 	mPerObjectCB(nullptr),
 	mRasterizerState(nullptr),
-	mDebugQuadCB(nullptr),
 	mSamplerState(nullptr)
 {}
 
@@ -1722,10 +1894,9 @@ ShadowMap::~ShadowMap()
 	SafeRelease(mVertexShader);
 	SafeRelease(mInputLayout);
 	SafeRelease(mRasterizerState);
-	SafeRelease(mDebugQuadCB);
 	SafeRelease(mSamplerState);
 }
-void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height, float AspectRatio)
+void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 {
 	mWidth = width;
 	mHeight = height;
@@ -1829,97 +2000,6 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height, float Aspect
 		HR(device->CreateRasterizerState(&desc, &mRasterizerState));
 	}
 
-	// debug quad
-	{
-		GeometryGenerator::CreateScreenQuad(mDebugQuad.mMesh);
-
-		// vertex buffer
-		{
-			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mDebugQuad.mMesh.mVertices.size();
-			desc.Usage = D3D11_USAGE_IMMUTABLE;
-			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
-			desc.StructureByteStride = 0;
-
-			D3D11_SUBRESOURCE_DATA InitData;
-			InitData.pSysMem = mDebugQuad.mMesh.mVertices.data();
-			InitData.SysMemPitch = 0;
-			InitData.SysMemSlicePitch = 0;
-
-			HR(device->CreateBuffer(&desc, &InitData, &mDebugQuad.mVertexBuffer));
-		}
-
-		// input buffer
-		{
-			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(UINT) * mDebugQuad.mMesh.mIndices.size();
-			desc.Usage = D3D11_USAGE_IMMUTABLE;
-			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
-			desc.StructureByteStride = 0;
-
-			D3D11_SUBRESOURCE_DATA InitData;
-			InitData.pSysMem = mDebugQuad.mMesh.mIndices.data();
-			InitData.SysMemPitch = 0;
-			InitData.SysMemSlicePitch = 0;
-
-			HR(device->CreateBuffer(&desc, &InitData, &mDebugQuad.mIndexBuffer));
-		}
-
-		// vertex shader
-		{
-			std::wstring path = L"DebugQuadVS.hlsl";
-
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
-			HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mDebugQuad.mVertexShader));
-
-			// input layout
-			{
-				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
-				{
-					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				};
-				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mDebugQuad.mInputLayout));
-			}
-		}
-
-		// pixel shader
-		{
-			std::wstring path = L"DebugQuadPS.hlsl";
-
-			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ nullptr, nullptr });
-
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-			HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mDebugQuad.mPixelShader));
-		}
-
-		// constant buffer
-		{
-			static_assert((sizeof(DebugQuadCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
-
-			D3D11_BUFFER_DESC desc;
-			desc.ByteWidth = sizeof(DebugQuadCB);
-			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
-			desc.StructureByteStride = 0;
-
-			HR(device->CreateBuffer(&desc, nullptr, &mDebugQuadCB));
-		}
-
-		ResizeDebugQuad(AspectRatio);
-
-		mDebugQuad.mAlbedoSRV = mSRV;
-	}
-
 	// sampler state
 	{
 		D3D11_SAMPLER_DESC desc;
@@ -1946,11 +2026,7 @@ ID3D11ShaderResourceView*& ShadowMap::GetSRV()
 void ShadowMap::BindDSVAndSetNullRenderTarget(ID3D11DeviceContext* context)
 {
 	context->RSSetViewports(1, &mViewport);
-
-	//ID3D11RenderTargetView* NullRTV[1] = { nullptr };
-	//context->OMSetRenderTargets(1, NullRTV, mDSV);
 	context->OMSetRenderTargets(0, nullptr, mDSV);
-
 	context->ClearDepthStencilView(mDSV, D3D11_CLEAR_DEPTH, 1, 0);
 }
 
@@ -2013,51 +2089,542 @@ ID3D11SamplerState*& ShadowMap::GetSS()
 	return mSamplerState;
 }
 
-void ShadowMap::DrawDebugQuad(ID3D11DeviceContext* context)
+ID3D11Buffer*& ShadowMap::GetCB()
 {
-	// shaders
-	context->VSSetShader(mDebugQuad.mVertexShader.Get(), nullptr, 0);
-	context->PSSetShader(mDebugQuad.mPixelShader.Get(), nullptr, 0);
-
-	// input layout
-	context->IASetInputLayout(mDebugQuad.mInputLayout.Get());
-
-	// primitive topology
-	context->IASetPrimitiveTopology(mDebugQuad.mPrimitiveTopology);
-
-	// vertex and index buffers
-	UINT stride = sizeof(GeometryGenerator::Vertex);
-	UINT offset = 0;
-	context->IASetVertexBuffers(0, 1, mDebugQuad.mVertexBuffer.GetAddressOf(), &stride, &offset);
-	context->IASetIndexBuffer(mDebugQuad.mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-
-	// constant buffer per object
-	{
-		ShadowMap::DebugQuadCB buffer;
-		XMStoreFloat4x4(&buffer.mWorldViewProj, mDebugQuad.mWorld);
-		context->UpdateSubresource(mDebugQuadCB, 0, nullptr, &buffer, 0, 0);
-		context->VSSetConstantBuffers(0, 1, &mDebugQuadCB);
-	}
-
-	// rasterizer, blend and depth-stencil states
-	context->RSSetState(mDebugQuad.mRasterizerState.Get());
-	FLOAT BlendFactor[] = { 0, 0, 0, 0 };
-	context->OMSetBlendState(mDebugQuad.mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
-	context->OMSetDepthStencilState(mDebugQuad.mDepthStencilState.Get(), mDebugQuad.mStencilRef);
-	
-	// bind SRV
-	context->PSSetShaderResources(0, 1, mDebugQuad.mAlbedoSRV.GetAddressOf());
-
-	// draw call
-	context->DrawIndexed(mDebugQuad.mMesh.mIndices.size(), mDebugQuad.mIndexStart, mDebugQuad.mVertexStart);
-
-	// unbind SRV
-	ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
-	context->PSSetShaderResources(0, 1, NullSRV);
+	return mPerObjectCB;
 }
 
-void ShadowMap::ResizeDebugQuad(float AspectRatio)
+
+SSAO::SSAO() :
+	mNormalDepthRTV(nullptr),
+	mNormalDepthSRV(nullptr),
+	mNormalDepthVS(nullptr),
+	mNormalDepthIL(nullptr),
+	mNormalDepthPS(nullptr),
+	mNormalDepthSS(nullptr),
+	mRandomVectorSRV(nullptr),
+	mRandomVectorSS(nullptr),
+	mAmbientMapRTV{nullptr, nullptr},
+	mAmbientMapSRV{nullptr, nullptr},
+	mAmbientMapComputeCB(nullptr)
+{}
+
+SSAO::~SSAO()
 {
-	float w = 0.5f / AspectRatio;
-	mDebugQuad.mWorld = XMMatrixScaling(w, 0.5f, 1.0f) * XMMatrixTranslation(1 - w, -0.5f, 0.0f);
+	SafeRelease(mNormalDepthRTV);
+	SafeRelease(mNormalDepthSRV);
+	SafeRelease(mNormalDepthVS);
+	SafeRelease(mNormalDepthIL);
+	SafeRelease(mNormalDepthPS);
+	SafeRelease(mNormalDepthCB);
+	SafeRelease(mNormalDepthSS);
+	SafeRelease(mRandomVectorSRV);
+	SafeRelease(mRandomVectorSS);
+	SafeRelease(mAmbientMapRTV[0]);
+	SafeRelease(mAmbientMapSRV[0]);
+	SafeRelease(mAmbientMapRTV[1]);
+	SafeRelease(mAmbientMapSRV[1]);
+	SafeRelease(mAmbientMapComputeCB);
+}
+
+void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfViewY, float FarZ)
+{
+	OnResize(device, width, height, FieldOfViewY, FarZ);
+
+	// normal depth
+	{
+		// VS
+		{
+			std::wstring path = L"SSAONormalDepthVS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mNormalDepthVS));
+
+			// input layout
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				};
+
+				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mNormalDepthIL));
+			}
+		}
+
+		// PS
+		{
+			std::wstring path = L"SSAONormalDepthPS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			// spheres and skull don't have an albedo texture
+			defines.push_back({ "ENABLE_TEXTURE",        "0" });
+			defines.push_back({ "ENABLE_ALPHA_CLIPPING", "0" });
+			// TODO : enable normap mapping ?
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mNormalDepthPS));
+		}
+
+		// constant buffer
+		{
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(NormalDepthCB);
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			HR(device->CreateBuffer(&desc, nullptr, &mNormalDepthCB));
+		}
+
+		// sampler state
+		{
+			D3D11_SAMPLER_DESC desc;
+			desc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+			desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+			desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+			desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+			desc.MipLODBias = 0;
+			desc.MaxAnisotropy = 1;
+			desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+			FLOAT BorderColor[4] = { 0.0f, 0.0f, 0.0f, 1e5f };
+			CopyMemory(desc.BorderColor, BorderColor, sizeof(desc.BorderColor));
+			desc.MinLOD = 0;
+			desc.MaxLOD = 0;
+
+			HR(device->CreateSamplerState(&desc, &mNormalDepthSS));
+		}
+	}
+
+	// samples offset
+	{
+		// 14 uniformly distributed vectors :
+		//  the 8 corners of the cube and
+		//  the 6 center points along each cube face
+		
+		// alternate the points on opposites sides of the cubes to
+		// get the vectors spread out even with less than 14 samples
+
+		// 8 cube corners
+		mSampleOffset[0] = XMFLOAT4(+1.0f, +1.0f, +1.0f, 0.0f);
+		mSampleOffset[1] = XMFLOAT4(-1.0f, -1.0f, -1.0f, 0.0f);
+
+		mSampleOffset[2] = XMFLOAT4(-1.0f, +1.0f, +1.0f, 0.0f);
+		mSampleOffset[3] = XMFLOAT4(+1.0f, -1.0f, -1.0f, 0.0f);
+
+		mSampleOffset[4] = XMFLOAT4(+1.0f, +1.0f, -1.0f, 0.0f);
+		mSampleOffset[5] = XMFLOAT4(-1.0f, -1.0f, +1.0f, 0.0f);
+
+		mSampleOffset[6] = XMFLOAT4(-1.0f, +1.0f, -1.0f, 0.0f);
+		mSampleOffset[7] = XMFLOAT4(+1.0f, -1.0f, +1.0f, 0.0f);
+
+		// 6 centers of cube faces
+		mSampleOffset[8] = XMFLOAT4(-1.0f, 0.0f, 0.0f, 0.0f);
+		mSampleOffset[9] = XMFLOAT4(+1.0f, 0.0f, 0.0f, 0.0f);
+
+		mSampleOffset[10] = XMFLOAT4(0.0f, -1.0f, 0.0f, 0.0f);
+		mSampleOffset[11] = XMFLOAT4(0.0f, +1.0f, 0.0f, 0.0f);
+
+		mSampleOffset[12] = XMFLOAT4(0.0f, 0.0f, -1.0f, 0.0f);
+		mSampleOffset[13] = XMFLOAT4(0.0f, 0.0f, +1.0f, 0.0f);
+
+		for (UINT i = 0; i < 14; ++i)
+		{
+			// random length in [0.25, 1.0)
+			float length = GameMath::RandNorm(0.25f, 1.0f);
+
+			XMVECTOR v = length * XMVector4Normalize(XMLoadFloat4(&mSampleOffset[i]));
+			XMStoreFloat4(&mSampleOffset[i], v);
+		}
+	}
+
+	// random vector map
+	{
+		// SRV
+		{
+			D3D11_TEXTURE2D_DESC desc;
+			desc.Width = 256;
+			desc.Height = 256;
+			desc.MipLevels = 1;
+			desc.ArraySize = 1;
+			desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			desc.SampleDesc.Count = 1;
+			desc.SampleDesc.Quality = 0;
+			desc.Usage = D3D11_USAGE_IMMUTABLE;
+			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+
+			DirectX::PackedVector::XMCOLOR color[256 * 256];
+			for (UINT i = 0; i < 256; ++i)
+			{
+				for (UINT j = 0; j < 256; ++j)
+				{
+					XMFLOAT3 v(GameMath::RandNorm(), GameMath::RandNorm(), GameMath::RandNorm());
+					color[i * 256 + j] = DirectX::PackedVector::XMCOLOR(v.x, v.y, v.z, 0.0f);
+				}
+			}
+
+			D3D11_SUBRESOURCE_DATA InitData;
+			InitData.pSysMem = color;
+			InitData.SysMemPitch = 256 * sizeof(DirectX::PackedVector::XMCOLOR);
+			InitData.SysMemSlicePitch = 0;
+
+			ID3D11Texture2D* texture = nullptr;
+			HR(device->CreateTexture2D(&desc, &InitData, &texture));
+
+			HR(device->CreateShaderResourceView(texture, nullptr, &mRandomVectorSRV));
+
+			SafeRelease(texture);
+		}
+
+		// sampler state
+		{
+			D3D11_SAMPLER_DESC desc;
+			desc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+			desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+			desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+			desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+			desc.MipLODBias = 0;
+			desc.MaxAnisotropy = 1;
+			desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+			ZeroMemory(desc.BorderColor, sizeof(desc.BorderColor));
+			desc.MinLOD = 0;
+			desc.MaxLOD = 0;
+
+			HR(device->CreateSamplerState(&desc, &mRandomVectorSS));
+		}
+	}
+
+	// ambient map
+	{
+		GeometryGenerator::CreateScreenQuad(mAmbientMapQuad.mMesh);
+
+		// store far plane frustum corner indices in normal.x
+		mAmbientMapQuad.mMesh.mVertices[0].mNormal = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		mAmbientMapQuad.mMesh.mVertices[1].mNormal = XMFLOAT3(1.0f, 0.0f, 0.0f);
+		mAmbientMapQuad.mMesh.mVertices[2].mNormal = XMFLOAT3(2.0f, 0.0f, 0.0f);
+		mAmbientMapQuad.mMesh.mVertices[3].mNormal = XMFLOAT3(3.0f, 0.0f, 0.0f);
+
+		// vertex buffer
+		{
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(GeometryGenerator::Vertex) * mAmbientMapQuad.mMesh.mVertices.size();
+			desc.Usage = D3D11_USAGE_IMMUTABLE;
+			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			D3D11_SUBRESOURCE_DATA InitData;
+			InitData.pSysMem = mAmbientMapQuad.mMesh.mVertices.data();
+			InitData.SysMemPitch = 0;
+			InitData.SysMemSlicePitch = 0;
+
+			HR(device->CreateBuffer(&desc, &InitData, &mAmbientMapQuad.mVertexBuffer));
+		}
+
+		// input buffer
+		{
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(UINT) * mAmbientMapQuad.mMesh.mIndices.size();
+			desc.Usage = D3D11_USAGE_IMMUTABLE;
+			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			D3D11_SUBRESOURCE_DATA InitData;
+			InitData.pSysMem = mAmbientMapQuad.mMesh.mIndices.data();
+			InitData.SysMemPitch = 0;
+			InitData.SysMemSlicePitch = 0;
+
+			HR(device->CreateBuffer(&desc, &InitData, &mAmbientMapQuad.mIndexBuffer));
+		}
+
+		// VS
+		{
+			std::wstring path = L"SSAOAmbientMapComputeVS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mAmbientMapQuad.mVertexShader));
+
+			// input layout
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				};
+
+				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mAmbientMapQuad.mInputLayout));
+			}
+		}
+
+		// PS
+		{
+			std::wstring path = L"SSAOAmbientMapComputePS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			// spheres and skull don't have an albedo texture
+			defines.push_back({ "ENABLE_TEXTURE",        "0" });
+			defines.push_back({ "ENABLE_ALPHA_CLIPPING", "0" });
+			// TODO : enable normap mapping ?
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mAmbientMapQuad.mPixelShader));
+		}
+
+		// constant buffer
+		{
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(AmbientMapComputeCB);
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			HR(device->CreateBuffer(&desc, nullptr, &mAmbientMapComputeCB));
+		}
+	}
+}
+
+void SSAO::OnResize(ID3D11Device* device, UINT width, UINT height, float FieldOfViewY, float FarZ)
+{
+	mWidth = width;
+	mHeight = height;
+
+	// render to ambient map at half the resolution
+	mAmbientMapViewport.TopLeftX = 0.0f;
+	mAmbientMapViewport.TopLeftY = 0.0f;
+	mAmbientMapViewport.Width = mWidth / 2.0f;
+	mAmbientMapViewport.Height = mHeight / 2.0f;
+	mAmbientMapViewport.MinDepth = 0.0f;
+	mAmbientMapViewport.MaxDepth = 1.0f;
+
+	// frustum far corners
+	{
+		float aspect = (float)mWidth / (float)mHeight;
+
+		float halfHeight = FarZ * tanf(0.5f * FieldOfViewY);
+		float halfWidth = aspect * halfHeight;
+
+		mFrustumFarCorner[0] = XMFLOAT4(-halfWidth, -halfHeight, FarZ, 0.0f);
+		mFrustumFarCorner[1] = XMFLOAT4(-halfWidth, +halfHeight, FarZ, 0.0f);
+		mFrustumFarCorner[2] = XMFLOAT4(+halfWidth, +halfHeight, FarZ, 0.0f);
+		mFrustumFarCorner[3] = XMFLOAT4(+halfWidth, -halfHeight, FarZ, 0.0f);
+	}
+
+	// normal depth RTV and SRV
+	{
+		SafeRelease(mNormalDepthRTV);
+		SafeRelease(mNormalDepthSRV);
+
+		D3D11_TEXTURE2D_DESC desc;
+		desc.Width = mWidth;
+		desc.Height = mHeight;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+		desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+
+		ID3D11Texture2D* texture = nullptr;
+		HR(device->CreateTexture2D(&desc, nullptr, &texture));
+
+		HR(device->CreateRenderTargetView(texture, nullptr, &mNormalDepthRTV));
+		HR(device->CreateShaderResourceView(texture, nullptr, &mNormalDepthSRV));
+
+		SafeRelease(texture);
+	}
+
+	// ambient map RTV and SRV
+	{
+		// render to ambient map at half the resolution
+		D3D11_TEXTURE2D_DESC desc;
+		desc.Width = mWidth / 2;
+		desc.Height = mHeight / 2;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+		desc.Format = DXGI_FORMAT_R16_FLOAT;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+
+		for (UINT i = 0; i < 2; ++i)
+		{
+			SafeRelease(mAmbientMapRTV[i]);
+			SafeRelease(mAmbientMapSRV[i]);
+
+			ID3D11Texture2D* texture = nullptr;
+			HR(device->CreateTexture2D(&desc, nullptr, &texture));
+
+			HR(device->CreateRenderTargetView(texture, nullptr, &mAmbientMapRTV[i]));
+			HR(device->CreateShaderResourceView(texture, nullptr, &mAmbientMapSRV[i]));
+
+			SafeRelease(texture);
+		}
+	}
+}
+
+ID3D11Buffer*& SSAO::GetNormalDepthCB()
+{
+	return mNormalDepthCB;
+}
+
+ID3D11VertexShader* SSAO::GetNormalDepthVS()
+{
+	return mNormalDepthVS;
+}
+
+ID3D11InputLayout* SSAO::GetNormalDepthIL()
+{
+	return mNormalDepthIL;
+}
+
+ID3D11PixelShader* SSAO::GetNormalDepthPS()
+{
+	return mNormalDepthPS;
+}
+
+void SSAO::BindNormalDepthRenderTarget(ID3D11DeviceContext* context, ID3D11DepthStencilView* dsv)
+{
+	context->OMSetRenderTargets(1, &mNormalDepthRTV, dsv);
+
+	// clear view space normal to (0,0,-1) and clear view space depth to be very far away
+	float ClearColor[] = { 0.0f, 0.0f, -1.0f, 1e5f };
+	context->ClearRenderTargetView(mNormalDepthRTV, ClearColor);
+	context->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+}
+
+void SSAO::ComputeAmbientMap(ID3D11DeviceContext* context, const CameraObject& camera)
+{
+	// bind the ambient map as the render target
+	// do not bind a depth/stencil buffer -> no depth test is performed
+	context->OMSetRenderTargets(1, &mAmbientMapRTV[0], nullptr);
+	context->ClearRenderTargetView(mAmbientMapRTV[0], Colors::Black);
+	context->RSSetViewports(1, &mAmbientMapViewport);
+
+	// transform NDC space [-1,+1]^2 to texture space [0,1]^2
+	XMMATRIX T
+	(
+		+0.5f,  0.0f, 0.0f, 0.0f,
+		 0.0f, -0.5f, 0.0f, 0.0f,
+		 0.0f,  0.0f, 1.0f, 0.0f,
+		+0.5f, +0.5f, 0.0f, 1.0f
+	);
+
+	{
+		FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+
+		// shaders
+		context->VSSetShader(mAmbientMapQuad.mVertexShader.Get(), nullptr, 0);
+		context->PSSetShader(mAmbientMapQuad.mPixelShader.Get(), nullptr, 0);
+
+		// input layout
+		context->IASetInputLayout(mAmbientMapQuad.mInputLayout.Get());
+
+		// primitive topology
+		context->IASetPrimitiveTopology(mAmbientMapQuad.mPrimitiveTopology);
+
+		// vertex and index buffers
+		if (mAmbientMapQuad.mInstancedBuffer)
+		{
+			UINT stride[2] = { sizeof(GeometryGenerator::Vertex), sizeof(GameObject::InstancedData) };
+			UINT offset[2] = { 0, 0 };
+
+			ID3D11Buffer* vbs[2] = { mAmbientMapQuad.mVertexBuffer.Get(), mAmbientMapQuad.mInstancedBuffer };
+
+			context->IASetVertexBuffers(0, 2, vbs, stride, offset);
+			context->IASetIndexBuffer(mAmbientMapQuad.mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+		else
+		{
+			UINT stride = sizeof(GeometryGenerator::Vertex);
+			UINT offset = 0;
+
+			context->IASetVertexBuffers(0, 1, mAmbientMapQuad.mVertexBuffer.GetAddressOf(), &stride, &offset);
+			context->IASetIndexBuffer(mAmbientMapQuad.mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+
+		// constant buffer per object
+		{
+			AmbientMapComputeCB buffer;
+			XMStoreFloat4x4(&buffer.ProjTexture, camera.mProj * T);
+			for (UINT i = 0; i <  4; ++i) buffer.FrustumFarCorner[i] = mFrustumFarCorner[i];
+			for (UINT i = 0; i < 14; ++i) buffer.SampleOffset[i] = mSampleOffset[i];
+			buffer.OcclusionRadius = 0.5f;
+			buffer.OcclusionFadeStart = 0.2f;
+			buffer.OcclusionFadeEnd = 2.0f;
+			buffer.SurfaceEpsilon = 0.05f;
+
+			context->UpdateSubresource(mAmbientMapComputeCB, 0, 0, &buffer, 0, 0);
+
+			context->VSSetConstantBuffers(0, 1, &mAmbientMapComputeCB);
+			context->PSSetConstantBuffers(0, 1, &mAmbientMapComputeCB);
+		}
+
+		// bind SRVs
+		{
+			context->PSSetShaderResources(0, 1, &mNormalDepthSRV);
+			context->PSSetShaderResources(1, 1, &mRandomVectorSRV);
+		}
+
+		// bind sampler states
+		{
+			context->PSSetSamplers(2, 1, &mNormalDepthSS);
+			context->PSSetSamplers(3, 1, &mRandomVectorSS);
+		}
+
+		// rasterizer, blend and depth-stencil states
+		context->RSSetState(mAmbientMapQuad.mRasterizerState.Get());
+		context->OMSetBlendState(mAmbientMapQuad.mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+		context->OMSetDepthStencilState(mAmbientMapQuad.mDepthStencilState.Get(), mAmbientMapQuad.mStencilRef);
+
+		// draw call
+		if (mAmbientMapQuad.mIndexBuffer && mAmbientMapQuad.mInstancedBuffer)
+		{
+			context->DrawIndexedInstanced(mAmbientMapQuad.mMesh.mIndices.size(), mAmbientMapQuad.mVisibleInstanceCount, 0, 0, 0);
+		}
+		else if (mAmbientMapQuad.mIndexBuffer)
+		{
+			context->DrawIndexed(mAmbientMapQuad.mMesh.mIndices.size(), mAmbientMapQuad.mIndexStart, mAmbientMapQuad.mVertexStart);
+		}
+		else
+		{
+			context->Draw(mAmbientMapQuad.mMesh.mVertices.size(), mAmbientMapQuad.mVertexStart);
+		}
+
+		//// unbind SRVs
+		ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
+		context->PSSetShaderResources(0, 2, NullSRV);
+	}
+}
+
+void SSAO::BlurAmbientMap(UINT count)
+{
+	// ...
+}
+
+ID3D11ShaderResourceView*& SSAO::GetAmbientMapSRV()
+{
+	return mAmbientMapSRV[0];
 }

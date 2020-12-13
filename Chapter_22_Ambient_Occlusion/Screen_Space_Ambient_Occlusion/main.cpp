@@ -38,6 +38,8 @@ public:
 		XMFLOAT4X4 mViewProj;
 	};
 
+	static_assert((sizeof(PerFrameCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
 	ID3D11Buffer* mPerFrameCB;
 
 	struct PerObjectCB
@@ -48,7 +50,10 @@ public:
 		GameObject::Material mMaterial;
 		XMFLOAT4X4 mTexCoordTransform;
 		XMFLOAT4X4 mShadowTransform;
+		XMFLOAT4X4 mWorldViewProjTexture;
 	};
+
+	static_assert((sizeof(PerObjectCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
 
 	ID3D11Buffer* mPerObjectCB;
 
@@ -68,8 +73,10 @@ public:
 	BoundingSphere mSceneBounds;
 
 	ShadowMap mShadowMap;
+	SSAO mSSAO;
 
 	void DrawSceneToShadowMap();
+	void DrawSceneToSSAONormalDepthMap();
 };
 
 TestApp::TestApp() :
@@ -78,7 +85,7 @@ TestApp::TestApp() :
 	mPerObjectCB(nullptr),
 	mSamplerState(nullptr)
 {
-	mMainWindowTitle = "Ch21 Shadow Mapping";
+	mMainWindowTitle = "Ch22 Ambient Occlusion";
 
 	//m4xMSAAEnabled = true;
 
@@ -216,8 +223,6 @@ bool TestApp::Init()
 
 	// build per frame costant buffer
 	{
-		static_assert((sizeof(PerFrameCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
-
 		D3D11_BUFFER_DESC desc;
 		desc.ByteWidth = sizeof(PerFrameCB);
 		desc.Usage = D3D11_USAGE_DEFAULT;
@@ -231,8 +236,6 @@ bool TestApp::Init()
 
 	// build per object constant buffer
 	{
-		static_assert((sizeof(PerObjectCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
-
 		D3D11_BUFFER_DESC desc;
 		desc.ByteWidth = sizeof(PerObjectCB);
 		desc.Usage = D3D11_USAGE_DEFAULT;
@@ -512,9 +515,13 @@ bool TestApp::Init()
 		mContext->PSSetSamplers(0, 1, &mSamplerState);
 	}
 
-	mShadowMap.Init(mDevice, 2048, 2048, AspectRatio());
+	mShadowMap.Init(mDevice, 2048, 2048);
+	mShadowMap.mDebugQuad.Init(mDevice, AspectRatio(), DebugQuad::ScreenCorner::BottomLeft, 1);
 	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
 	mContext->PSSetSamplers(1, 1, &mShadowMap.GetSS());
+
+	mSSAO.Init(mDevice, mMainWindowWidth, mMainWindowHeight, mCamera.mFovAngleY, mCamera.mFarZ);
+	mSSAO.mDebugQuad.Init(mDevice, AspectRatio(), DebugQuad::ScreenCorner::BottomRight, AspectRatio());
 
 	return true;
 }
@@ -523,7 +530,10 @@ void TestApp::OnResize(GLFWwindow* window, int width, int height)
 {
 	D3DApp::OnResize(window, width, height);
 
-	mShadowMap.ResizeDebugQuad(AspectRatio());
+	mShadowMap.mDebugQuad.OnResize(AspectRatio());
+
+	mSSAO.OnResize(mDevice, mMainWindowWidth, mMainWindowHeight, mCamera.mFovAngleY, mCamera.mFarZ);
+	mSSAO.mDebugQuad.OnResize(AspectRatio());
 }
 
 void TestApp::UpdateScene(float dt)
@@ -576,8 +586,8 @@ void TestApp::DrawSceneToShadowMap()
 		ShadowMap::PerObjectCB buffer;
 		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * ViewProj);
 		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexCoordTransform);
-		mContext->UpdateSubresource(mPerObjectCB, 0, nullptr, &buffer, 0, 0);
-		mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
+		mContext->UpdateSubresource(mShadowMap.GetCB(), 0, nullptr, &buffer, 0, 0);
+		mContext->VSSetConstantBuffers(0, 1, &mShadowMap.GetCB());
 	};
 
 	auto DrawGameObject = [this, &SetPerObjectCB](GameObject* obj) -> void
@@ -683,14 +693,116 @@ void TestApp::DrawSceneToShadowMap()
 	}
 }
 
+void TestApp::DrawSceneToSSAONormalDepthMap()
+{
+	auto SetPerObjectCB = [this](GameObject* obj) -> void
+	{
+		XMMATRIX view = XMLoadFloat4x4(&mCamera.mView);
+		XMMATRIX WorldView = obj->mWorld * view;
+
+		SSAO::NormalDepthCB buffer;
+		XMStoreFloat4x4(&buffer.WorldView, WorldView);
+		XMStoreFloat4x4(&buffer.WorldViewProj, WorldView * mCamera.mProj);
+		XMStoreFloat4x4(&buffer.WorldInverseTransposeView, GameMath::InverseTranspose(obj->mWorld) * view);
+		XMStoreFloat4x4(&buffer.TexCoordTransform, obj->mTexCoordTransform);
+		mContext->UpdateSubresource(mSSAO.GetNormalDepthCB(), 0, nullptr, &buffer, 0, 0);
+		mContext->VSSetConstantBuffers(0, 1, &mSSAO.GetNormalDepthCB());
+	};
+
+	auto DrawGameObject = [this, &SetPerObjectCB](GameObject* obj) -> void
+	{
+		FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+
+		// shaders
+		mContext->VSSetShader(mSSAO.GetNormalDepthVS(), nullptr, 0);
+		mContext->PSSetShader(mSSAO.GetNormalDepthPS(), nullptr, 0);
+
+		// input layout
+		mContext->IASetInputLayout(mSSAO.GetNormalDepthIL());
+
+		// primitive topology
+		mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
+
+		// vertex and index buffers
+		if (obj->mInstancedBuffer)
+		{
+			UINT stride[2] = { sizeof(GeometryGenerator::Vertex), sizeof(GameObject::InstancedData) };
+			UINT offset[2] = { 0, 0 };
+
+			ID3D11Buffer* vbs[2] = { obj->mVertexBuffer.Get(), obj->mInstancedBuffer };
+
+			mContext->IASetVertexBuffers(0, 2, vbs, stride, offset);
+			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+		else
+		{
+			UINT stride = sizeof(GeometryGenerator::Vertex);
+			UINT offset = 0;
+
+			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
+			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+
+		//  per object constant buffer
+		SetPerObjectCB(obj);
+
+		// textures
+		{
+			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
+
+			// TODO : add normal mapping ?
+
+			//mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+			//mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+		}
+
+		// rasterizer, blend and depth-stencil states
+		mContext->RSSetState(obj->mRasterizerState.Get());
+		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+		mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+
+		// draw call
+		if (obj->mIndexBuffer && obj->mInstancedBuffer)
+		{
+			mContext->DrawIndexedInstanced(obj->mMesh.mIndices.size(), obj->mVisibleInstanceCount, 0, 0, 0);
+		}
+		else if (obj->mIndexBuffer)
+		{
+			mContext->DrawIndexed(obj->mMesh.mIndices.size(), obj->mIndexStart, obj->mVertexStart);
+		}
+		else
+		{
+			mContext->Draw(obj->mMesh.mVertices.size(), obj->mVertexStart);
+		}
+
+		// unbind SRV
+		ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
+		mContext->PSSetShaderResources(0, 1, NullSRV);
+	};
+
+	DrawGameObject(&mGrid);
+	DrawGameObject(&mBox);
+
+	for (UINT i = 0; i < 5; ++i)
+	{
+		mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
+		DrawGameObject(&mCylinder);
+		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
+		DrawGameObject(&mCylinder);
+
+		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
+		DrawGameObject(&mSphere);
+		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
+		DrawGameObject(&mSphere);
+	}
+
+	DrawGameObject(&mSkull);
+}
+
 void TestApp::DrawScene()
 {
 	assert(mContext);
 	assert(mSwapChain);
-
-	// unbind shadow map as SRV
-	ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
-	mContext->PSSetShaderResources(3, 1, NullSRV);
 
 	// bind shadow map dsv and set null render target
 	mShadowMap.BindDSVAndSetNullRenderTarget(mContext);
@@ -700,15 +812,29 @@ void TestApp::DrawScene()
 
 	// restore rasterazer state -> no need for this, DrawGameObject sets the rasterazer state for each object
 
-	// restore back and depth buffers
+	// restore viewport
 	mContext->RSSetViewports(1, &mViewport);
+
+	// render view space normals and depths
+	mSSAO.BindNormalDepthRenderTarget(mContext, mDepthStencilView);
+	DrawSceneToSSAONormalDepthMap();
+
+	// compute ambient occlusion
+	mSSAO.ComputeAmbientMap(mContext, mCamera);
+	// blur ambient map
+	//mSSAO.BlurAmbientMap();
+
+	// restore back and depth buffers, and viewport
 	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
+	mContext->RSSetViewports(1, &mViewport);
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
 	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 
-	// bind shadow map as SRV
+	// bind shadow map and ambient map as SRV
 	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
+	mContext->PSSetShaderResources(4, 1, &mSSAO.GetAmbientMapSRV());
+	//mContext->PSSetShaderResources(4, 1, mSSAO.GetAmbientMapSRV().GetAddressOf());
 
 	auto SetPerFrameCB = [this]() -> void
 	{
@@ -737,15 +863,26 @@ void TestApp::DrawScene()
 
 	auto SetPerObjectCB = [this](GameObject* obj) -> void
 	{
+		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
+		XMMATRIX S = XMLoadFloat4x4(&mShadowMap.mShadowTransform);
+
+		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
+		XMMATRIX T
+		(
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
+			+0.5f, +0.5f, 0.0f, 1.0f
+		);
+
 		PerObjectCB buffer;
 		XMStoreFloat4x4(&buffer.mWorld, obj->mWorld);
 		XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(obj->mWorld));
-		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
 		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * mCamera.mProj);
 		buffer.mMaterial = obj->mMaterial;
 		XMStoreFloat4x4(&buffer.mTexCoordTransform, obj->mTexCoordTransform);
-		XMMATRIX S = XMLoadFloat4x4(&mShadowMap.mShadowTransform);
 		XMStoreFloat4x4(&buffer.mShadowTransform, obj->mWorld * S);
+		XMStoreFloat4x4(&buffer.mWorldViewProjTexture, obj->mWorld * V * mCamera.mProj * T);
 
 		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
 
@@ -873,13 +1010,22 @@ void TestApp::DrawScene()
 
 	if (IsKeyPressed(GLFW_KEY_2))
 	{
-		mShadowMap.DrawDebugQuad(mContext);
+		mShadowMap.mDebugQuad.Draw(mContext, mShadowMap.GetSRV());
+	}
+	
+	if (IsKeyPressed(GLFW_KEY_3))
+	{
+		mSSAO.mDebugQuad.Draw(mContext, mSSAO.GetAmbientMapSRV());
 	}
 
 	// draw sky
 	DrawGameObject(&mSky);
 
 	mSwapChain->Present(0, 0);
+	
+	// unbind shadow map and ambient map as SRV
+	ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
+	mContext->PSSetShaderResources(3, 2, NullSRV);
 }
 
 int main()

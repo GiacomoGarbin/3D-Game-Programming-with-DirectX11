@@ -50,6 +50,7 @@ cbuffer cbPerObject : register(b0)
 	Material gMaterial;
 	float4x4 gTexCoordTransform;
 	float4x4 gShadowTransform;
+	float4x4 gWorldViewProjTexture;
 };
 
 cbuffer cbPerFrame : register(b1)
@@ -78,6 +79,7 @@ Texture2D gAlbedoTexture : register(t0);
 Texture2D gNormalTexture : register(t1);
 TextureCube gCubeMap : register(t2);
 Texture2D gShadowTexture : register(t3);
+Texture2D gAmbientTexture : register(t4);
 
 SamplerState gLinearSamplerState : register(s0);
 SamplerComparisonState gShadowSamplerState : register(s1);
@@ -99,6 +101,7 @@ struct VertexOut
 	float3 TangentW  : TANGENT;
 	float2 TexCoord  : TEXCOORD0;
 	float4 ShadowH   : TEXCOORD1;
+	float4 AmbientH  : TEXCOORD2;
 	float TessFactor : TESSFACTOR;
 };
 
@@ -317,13 +320,17 @@ float4 main(VertexOut pin) : SV_TARGET
 		float3 shadow = float3(1, 1, 1);
 		shadow[0] = GetShadowFactor(pin.ShadowH);
 
+		// finish texture projection and sample ambient map
+		pin.AmbientH /= pin.AmbientH.w;
+		float AmbientFactor = gAmbientTexture.SampleLevel(gLinearSamplerState, pin.AmbientH.xy, 0).r;
+
 		[unroll]
 		for (int i = 0; i < 3; ++i)
 		{
 			float4 a, d, s;
 
 			ComputeLightDirectional(gMaterial, gLights[i], pin.NormalW, E, a, d, s);
-			ambient  += a;
+			ambient  += a * AmbientFactor;
 			diffuse  += d * shadow[i];
 			specular += s * shadow[i];
 		}
