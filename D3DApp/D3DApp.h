@@ -162,6 +162,7 @@ protected:
 	Microsoft::WRL::ComPtr<ID3D11RasterizerState> mNoCullRS;
 	// depth stencil states
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mLessEqualDSS;
+	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mEqualDSS;
 
 	// window stuff
 	GLFWwindow* mMainWindow;
@@ -591,6 +592,23 @@ class SSAO
 	GameObject mAmbientMapQuad;
 	ID3D11Buffer* mAmbientMapComputeCB;
 
+	ID3D11VertexShader* mBlurVS;
+	ID3D11InputLayout* mBlurIL;
+	ID3D11PixelShader* mBlurPS[2];
+	ID3D11Buffer* mBlurCB;
+	ID3D11SamplerState* mBlurSS;
+
+	struct BlurCB
+	{
+		float TexelWidth;
+		float TexelHeight;
+		XMFLOAT2 padding;
+	};
+
+	static_assert((sizeof(BlurCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+	void BlurAmbientMap(ID3D11DeviceContext* context, ID3D11RenderTargetView* rtv, ID3D11ShaderResourceView* srv, bool HorizontalBlur);
+
 public:
 	SSAO();
 	~SSAO();
@@ -601,7 +619,7 @@ public:
 	void BindNormalDepthRenderTarget(ID3D11DeviceContext* context, ID3D11DepthStencilView* dsv);
 
 	void ComputeAmbientMap(ID3D11DeviceContext* context, const CameraObject& camera);
-	void BlurAmbientMap(UINT count);
+	void BlurAmbientMap(ID3D11DeviceContext* context, UINT count);
 
 	struct NormalDepthCB
 	{

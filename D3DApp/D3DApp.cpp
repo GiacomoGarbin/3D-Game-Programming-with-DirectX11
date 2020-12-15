@@ -134,6 +134,7 @@ D3DApp::~D3DApp()
 	SafeRelease((*mNoCullRS.GetAddressOf()));
 	
 	SafeRelease((*mLessEqualDSS.GetAddressOf()));
+	SafeRelease((*mEqualDSS.GetAddressOf()));
 
 	glfwDestroyWindow(mMainWindow);
 	glfwTerminate();
@@ -363,6 +364,27 @@ bool D3DApp::InitDirect3D()
 		//desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
 		HR(mDevice->CreateDepthStencilState(&desc, &mLessEqualDSS));
+	}
+
+	// equal
+	{
+		D3D11_DEPTH_STENCIL_DESC desc;
+		desc.DepthEnable = true;
+		desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+		desc.DepthFunc = D3D11_COMPARISON_EQUAL;
+		desc.StencilEnable = false;
+		//desc.StencilReadMask = 0xff;
+		//desc.StencilWriteMask = 0xff;
+		//desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		//desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		//desc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		//desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+		HR(mDevice->CreateDepthStencilState(&desc, &mEqualDSS));
 	}
 
 	return true;
@@ -2106,7 +2128,12 @@ SSAO::SSAO() :
 	mRandomVectorSS(nullptr),
 	mAmbientMapRTV{nullptr, nullptr},
 	mAmbientMapSRV{nullptr, nullptr},
-	mAmbientMapComputeCB(nullptr)
+	mAmbientMapComputeCB(nullptr),
+	mBlurVS(nullptr),
+	mBlurIL(nullptr),
+	mBlurPS{ nullptr, nullptr },
+	mBlurCB(nullptr),
+	mBlurSS(nullptr)
 {}
 
 SSAO::~SSAO()
@@ -2125,6 +2152,12 @@ SSAO::~SSAO()
 	SafeRelease(mAmbientMapRTV[1]);
 	SafeRelease(mAmbientMapSRV[1]);
 	SafeRelease(mAmbientMapComputeCB);
+	SafeRelease(mBlurVS);
+	SafeRelease(mBlurIL);
+	SafeRelease(mBlurPS[0]);
+	SafeRelease(mBlurPS[1]);
+	SafeRelease(mBlurCB);
+	SafeRelease(mBlurSS);
 }
 
 void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfViewY, float FarZ)
@@ -2398,6 +2431,78 @@ void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfView
 			HR(device->CreateBuffer(&desc, nullptr, &mAmbientMapComputeCB));
 		}
 	}
+
+	// blur
+	{
+		// VS
+		{
+			std::wstring path = L"SSAOBlurVS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mBlurVS));
+
+			// input layout
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					//{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				};
+
+				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mBlurIL));
+			}
+		}
+
+		// PS
+		{
+			std::wstring path = L"SSAOBlurPS.hlsl";
+
+			for (UINT i = 0; i < 2; ++i)
+			{
+				std::string str = std::to_string(i);
+
+				std::vector<D3D_SHADER_MACRO> defines;
+				defines.push_back({ "HORIZONTAL_BLUR", str.c_str() });
+				defines.push_back({ nullptr, nullptr });
+				
+				ID3DBlob* pCode;
+				HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+				HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mBlurPS[i]));
+			}
+		}
+
+		// constant buffer
+		{
+			D3D11_BUFFER_DESC desc;
+			desc.ByteWidth = sizeof(BlurCB);
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+			desc.StructureByteStride = 0;
+
+			HR(device->CreateBuffer(&desc, nullptr, &mBlurCB));
+		}
+
+		// sampler state
+		{
+			D3D11_SAMPLER_DESC desc;
+			desc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+			desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+			desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+			desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+			desc.MipLODBias = 0;
+			desc.MaxAnisotropy = 1;
+			desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+			ZeroMemory(desc.BorderColor, sizeof(desc.BorderColor));
+			desc.MinLOD = 0;
+			desc.MaxLOD = 0;
+
+			HR(device->CreateSamplerState(&desc, &mBlurSS));
+		}
+	}
 }
 
 void SSAO::OnResize(ID3D11Device* device, UINT width, UINT height, float FieldOfViewY, float FarZ)
@@ -2617,11 +2722,80 @@ void SSAO::ComputeAmbientMap(ID3D11DeviceContext* context, const CameraObject& c
 		ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
 		context->PSSetShaderResources(0, 2, NullSRV);
 	}
+
+	context->OMSetRenderTargets(0, nullptr, nullptr);
 }
 
-void SSAO::BlurAmbientMap(UINT count)
+void SSAO::BlurAmbientMap(ID3D11DeviceContext* context, UINT count)
 {
-	// ...
+	// viewport
+	context->RSSetViewports(1, &mAmbientMapViewport);
+
+	// vertex shader
+	context->VSSetShader(mBlurVS, nullptr, 0);
+
+	// input layout
+	context->IASetInputLayout(mBlurIL);
+
+	// primitive topology
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// vertex and index buffers
+	{
+		UINT stride = sizeof(GeometryGenerator::Vertex);
+		UINT offset = 0;
+
+		context->IASetVertexBuffers(0, 1, mAmbientMapQuad.mVertexBuffer.GetAddressOf(), &stride, &offset);
+		context->IASetIndexBuffer(mAmbientMapQuad.mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	}
+
+	// constant buffer
+	{
+		BlurCB buffer;
+		buffer.TexelWidth = 1.0f / mAmbientMapViewport.Width;
+		buffer.TexelHeight = 1.0f / mAmbientMapViewport.Height;
+
+		context->UpdateSubresource(mBlurCB, 0, 0, &buffer, 0, 0);
+		context->PSSetConstantBuffers(0, 1, &mBlurCB);
+	}
+
+	// bind sampler state
+	context->PSSetSamplers(4, 1, &mBlurSS);
+
+	for (UINT i = 0; i < count; ++i)
+	{
+		// ping-pong ambient map textures for horizontal and vertical blur
+		BlurAmbientMap(context, mAmbientMapRTV[1], mAmbientMapSRV[0], true);
+		BlurAmbientMap(context, mAmbientMapRTV[0], mAmbientMapSRV[1], false);
+	}
+
+	// unbind sampler state
+	ID3D11SamplerState* NullSS[] = { nullptr };
+	context->PSSetSamplers(4, 1, NullSS);
+}
+
+void SSAO::BlurAmbientMap(ID3D11DeviceContext* context, ID3D11RenderTargetView* rtv, ID3D11ShaderResourceView* srv, bool HorizontalBlur)
+{
+	// render target
+	context->OMSetRenderTargets(1, &rtv, nullptr);
+	context->ClearRenderTargetView(rtv, Colors::Black);
+
+	// pixel shader
+	context->PSSetShader(mBlurPS[HorizontalBlur ? 1 : 0], nullptr, 0);
+	
+	// bind SRVs
+	{
+		ID3D11ShaderResourceView* SRVs[2] = { mNormalDepthSRV, srv };
+		context->PSSetShaderResources(0, 2, SRVs);
+	}
+
+	context->DrawIndexed(mAmbientMapQuad.mMesh.mIndices.size(), mAmbientMapQuad.mIndexStart, mAmbientMapQuad.mVertexStart);
+
+	// unbind SRVs
+	{
+		ID3D11ShaderResourceView* NullSRVs[2] = { nullptr, nullptr };
+		context->PSSetShaderResources(0, 2, NullSRVs);
+	}
 }
 
 ID3D11ShaderResourceView*& SSAO::GetAmbientMapSRV()

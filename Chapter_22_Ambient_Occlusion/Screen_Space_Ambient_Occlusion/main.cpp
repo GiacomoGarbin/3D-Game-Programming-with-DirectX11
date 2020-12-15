@@ -822,14 +822,15 @@ void TestApp::DrawScene()
 	// compute ambient occlusion
 	mSSAO.ComputeAmbientMap(mContext, mCamera);
 	// blur ambient map
-	//mSSAO.BlurAmbientMap();
+	mSSAO.BlurAmbientMap(mContext, 4);
 
 	// restore back and depth buffers, and viewport
 	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
 	mContext->RSSetViewports(1, &mViewport);
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
-	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+	//mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+	mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
 
 	// bind shadow map and ambient map as SRV
 	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
@@ -949,7 +950,11 @@ void TestApp::DrawScene()
 		}
 
 		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
-		mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+
+		if (obj->mDepthStencilState.Get() != nullptr)
+		{
+			mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+		}
 
 		// draw call
 		if (obj->mIndexBuffer && obj->mInstancedBuffer)

@@ -67,5 +67,11 @@
     <FxCompile Include="SSAOAmbientMapComputeVS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="SSAOBlurVS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="SSAOBlurPS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>
