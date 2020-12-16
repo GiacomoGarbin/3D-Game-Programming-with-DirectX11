@@ -517,7 +517,7 @@ bool TestApp::Init()
 
 	mShadowMap.Init(mDevice, 2048, 2048);
 	mShadowMap.mDebugQuad.Init(mDevice, AspectRatio(), DebugQuad::ScreenCorner::BottomLeft, 1);
-	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
+	//mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
 	mContext->PSSetSamplers(1, 1, &mShadowMap.GetSS());
 
 	mSSAO.Init(mDevice, mMainWindowWidth, mMainWindowHeight, mCamera.mFovAngleY, mCamera.mFarZ);
