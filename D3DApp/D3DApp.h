@@ -652,6 +652,7 @@ public:
 	ID3D11PixelShader* GetNormalDepthPS();
 
 	ID3D11ShaderResourceView*& GetAmbientMapSRV();
+	ID3D11RenderTargetView*& GetAmbientMapRTV();
 
 	DebugQuad mDebugQuad;
 };

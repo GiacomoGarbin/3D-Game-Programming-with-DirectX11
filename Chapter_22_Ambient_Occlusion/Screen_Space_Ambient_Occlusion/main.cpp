@@ -819,10 +819,18 @@ void TestApp::DrawScene()
 	mSSAO.BindNormalDepthRenderTarget(mContext, mDepthStencilView);
 	DrawSceneToSSAONormalDepthMap();
 
-	// compute ambient occlusion
-	mSSAO.ComputeAmbientMap(mContext, mCamera);
-	// blur ambient map
-	mSSAO.BlurAmbientMap(mContext, 4);
+	if (!IsKeyPressed(GLFW_KEY_4))
+	{
+		// compute ambient occlusion
+		mSSAO.ComputeAmbientMap(mContext, mCamera);
+		// blur ambient map
+		mSSAO.BlurAmbientMap(mContext, 4);
+	}
+	else
+	{
+		mContext->OMSetRenderTargets(1, &mSSAO.GetAmbientMapRTV(), nullptr);
+		mContext->ClearRenderTargetView(mSSAO.GetAmbientMapRTV(), Colors::White);
+	}
 
 	// restore back and depth buffers, and viewport
 	mContext->OMSetRenderTargets(1, &mRenderTargetView, mDepthStencilView);
@@ -830,7 +838,7 @@ void TestApp::DrawScene()
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
 	//mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
-	mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
+	//mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
 
 	// bind shadow map and ambient map as SRV
 	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
@@ -951,9 +959,13 @@ void TestApp::DrawScene()
 
 		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
 
-		if (obj->mDepthStencilState.Get() != nullptr)
+		if (obj->mDepthStencilState.Get() != nullptr || IsKeyPressed(GLFW_KEY_1))
 		{
 			mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+		}
+		else
+		{
+			mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
 		}
 
 		// draw call
@@ -1026,11 +1038,14 @@ void TestApp::DrawScene()
 	// draw sky
 	DrawGameObject(&mSky);
 
-	mSwapChain->Present(0, 0);
-	
+	// reset depth stencil state
+	mContext->OMSetDepthStencilState(nullptr, 0);
+
 	// unbind shadow map and ambient map as SRV
 	ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
 	mContext->PSSetShaderResources(3, 2, NullSRV);
+
+	mSwapChain->Present(0, 0);
 }
 
 int main()

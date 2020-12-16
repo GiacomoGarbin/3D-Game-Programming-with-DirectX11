@@ -16,8 +16,9 @@ Texture2D gAmbientMap : register(t1);
 
 SamplerState gBlurSamplerState : register(s4);
 
-float gBlurWeights[11] = { 0.05f, 0.05f, 0.1f, 0.1f, 0.1f, 0.2f, 0.1f, 0.1f, 0.1f, 0.05f, 0.05f };
-int gBlurRadius = 5;
+// global variables that are not marked static or extern are not compiled into the shader
+static float gBlurWeights[11] = { 0.05f, 0.05f, 0.1f, 0.1f, 0.1f, 0.2f, 0.1f, 0.1f, 0.1f, 0.05f, 0.05f };
+static float gBlurRadius = 5;
 
 float4 main(VertexOut pin) : SV_Target
 {
@@ -33,7 +34,7 @@ float4 main(VertexOut pin) : SV_Target
 	float total = gBlurWeights[5];
 
 	float4 CenterNormalDepth = gNormalDepthMap.SampleLevel(gBlurSamplerState, pin.TexCoord, 0);
-
+	
 	for (float i = -gBlurRadius; i <= +gBlurRadius; ++i)
 	{
 		// we already added in the center weight

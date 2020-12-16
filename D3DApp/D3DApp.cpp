@@ -2447,7 +2447,6 @@ void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfView
 				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
 				{
 					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					//{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
 					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				};
 
@@ -2796,9 +2795,16 @@ void SSAO::BlurAmbientMap(ID3D11DeviceContext* context, ID3D11RenderTargetView* 
 		ID3D11ShaderResourceView* NullSRVs[2] = { nullptr, nullptr };
 		context->PSSetShaderResources(0, 2, NullSRVs);
 	}
+
+	context->OMSetRenderTargets(0, nullptr, nullptr);
 }
 
 ID3D11ShaderResourceView*& SSAO::GetAmbientMapSRV()
 {
 	return mAmbientMapSRV[0];
+}
+
+ID3D11RenderTargetView*& SSAO::GetAmbientMapRTV()
+{
+	return mAmbientMapRTV[0];
 }
