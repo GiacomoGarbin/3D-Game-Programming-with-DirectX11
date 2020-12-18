@@ -39,9 +39,10 @@ public:
 	{
 		XMFLOAT4X4 mWorld;
 		XMFLOAT4X4 mWorldInverseTranspose;
+		XMFLOAT4X4 mViewProj;
 		XMFLOAT4X4 mWorldViewProj;
 		GameObject::Material mMaterial;
-		XMFLOAT4X4 mTexTransform;
+		XMFLOAT4X4 mTexCoordTransform;
 	};
 
 	ID3D11Buffer* mPerObjectCB;
@@ -275,16 +276,19 @@ void TestApp::OnMouseButton(GLFWwindow* window, int button, int action, int mods
 		XMFLOAT4X4 P;
 		XMStoreFloat4x4(&P, mCamera.mProj);
 
-		float vx = (+2*sx/mMainWindowWidth  - 1) / P(0,0);
-		float vy = (-2*sy/mMainWindowHeight + 1) / P(1,1);
+		float vx = (+2.0f * float(sx) / float(mMainWindowWidth)  - 1.0f) / P(0, 0);
+		float vy = (-2.0f * float(sy) / float(mMainWindowHeight) + 1.0f) / P(1, 1);
 
 		XMVECTOR RayOri = XMVectorSet(0, 0, 0, 1);
 		XMVECTOR RayDir = XMVectorSet(vx, vy, 1, 0);
 
 		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-		XMMATRIX InverseView = XMMatrixInverse(&XMMatrixDeterminant(V), V);
 
-		XMMATRIX InverseWorld = XMMatrixInverse(&XMMatrixDeterminant(mCar.mWorld), mCar.mWorld);
+		XMVECTOR DetView = XMMatrixDeterminant(V);
+		XMMATRIX InverseView = XMMatrixInverse(&DetView, V);
+
+		XMVECTOR DetWorld = XMMatrixDeterminant(mCar.mWorld);
+		XMMATRIX InverseWorld = XMMatrixInverse(&DetWorld, mCar.mWorld);
 
 		XMMATRIX ToLocal = InverseView * InverseWorld;
 
@@ -375,13 +379,16 @@ void TestApp::DrawScene()
 
 	static auto SetPerObjectCB = [this](GameObject* obj) -> void
 	{
+		XMMATRIX view = XMLoadFloat4x4(&mCamera.mView);
+		XMMATRIX ViewProj = view * mCamera.mProj;
+
 		PerObjectCB buffer;
 		XMStoreFloat4x4(&buffer.mWorld, obj->mWorld);
 		XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(obj->mWorld));
-		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * mCamera.mProj);
+		XMStoreFloat4x4(&buffer.mViewProj, ViewProj);
+		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * ViewProj);
 		buffer.mMaterial = obj->mMaterial;
-		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
+		XMStoreFloat4x4(&buffer.mTexCoordTransform, obj->mTexCoordTransform);
 
 		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
 
@@ -430,9 +437,9 @@ void TestApp::DrawScene()
 		SetPerObjectCB(obj);
 
 		// textures
-		if (obj->mSRV.Get())
+		if (obj->mAlbedoSRV.Get())
 		{
-			mContext->PSSetShaderResources(0, 1, obj->mSRV.GetAddressOf());
+			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
 		}
 
 		// rasterizer, blend and depth-stencil states
@@ -481,13 +488,16 @@ void TestApp::DrawScene()
 		mContext->OMSetDepthStencilState(mLessEqualDSS.Get(), 0);
 
 		{
+			XMMATRIX view = XMLoadFloat4x4(&mCamera.mView);
+			XMMATRIX ViewProj = view * mCamera.mProj;
+
 			PerObjectCB buffer;
 			XMStoreFloat4x4(&buffer.mWorld, mCar.mWorld);
 			XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(mCar.mWorld));
-			XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-			XMStoreFloat4x4(&buffer.mWorldViewProj, mCar.mWorld * V * mCamera.mProj);
+			XMStoreFloat4x4(&buffer.mViewProj, ViewProj);
+			XMStoreFloat4x4(&buffer.mWorldViewProj, mCar.mWorld * ViewProj);
 			buffer.mMaterial = mPickedMaterial;
-			XMStoreFloat4x4(&buffer.mTexTransform, mCar.mTexTransform);
+			XMStoreFloat4x4(&buffer.mTexCoordTransform, mCar.mTexCoordTransform);
 
 			mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
 

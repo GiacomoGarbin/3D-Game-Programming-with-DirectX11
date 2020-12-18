@@ -46,6 +46,7 @@ cbuffer cbPerObject : register(b0)
 {
 	float4x4 gWorld;
 	float4x4 gWorldInverseTranspose;
+	float4x4 gViewProj;
 	float4x4 gWorldViewProj;
 	Material gMaterial;
 	float4x4 gTexTransform;
@@ -90,7 +91,7 @@ VertexOut main(VertexIn vin)
 	VertexOut vout;
 
 	vout.PositionW = mul(gWorld, float4(vin.PositionL, 1)).xyz;
-	vout.PositionH = mul(gWorldViewProj, float4(vout.PositionW, 1));
+	vout.PositionH = mul(gViewProj, float4(vout.PositionW, 1));
 	vout.NormalW = mul((float3x3)gWorldInverseTranspose, vin.NormalL);
 	vout.TexCoord = mul(gTexTransform, float4(vin.TexCoord, 0, 1)).xy;
 

@@ -46,6 +46,7 @@ cbuffer cbPerObject : register(b0)
 {
 	float4x4 gWorld;
 	float4x4 gWorldInverseTranspose;
+	float4x4 gViewProj;
 	float4x4 gWorldViewProj;
 	Material gMaterial;
 	float4x4 gTexTransform;
