@@ -287,6 +287,34 @@ public:
 	static XMMATRIX InverseTranspose(XMMATRIX M);
 };
 
+class AnimationObject
+{
+	struct KeyFrame
+	{
+		float time;
+		XMFLOAT3 translation;
+		XMFLOAT3 scale;
+		XMFLOAT4 rotation; // quaternion
+
+		KeyFrame();
+		~KeyFrame();
+	};
+
+public:
+	// keyframes are sorted by time
+	std::vector<KeyFrame> keyframes;
+
+	float mCurrTime;
+
+	AnimationObject() :
+		mCurrTime(0)
+	{}
+
+	float GetTimeStart();
+	float GetTimeEnd();
+	void interpolate(float t, XMMATRIX& world);
+};
+
 class GameObject
 {
 public:
@@ -340,6 +368,8 @@ public:
 	std::vector<InstancedData> mInstances;
 	
 	UINT mVisibleInstanceCount;
+
+	AnimationObject mAnimation;
 
 	GameObject() :
 		mVertexBuffer(nullptr),

@@ -2808,3 +2808,77 @@ ID3D11RenderTargetView*& SSAO::GetAmbientMapRTV()
 {
 	return mAmbientMapRTV[0];
 }
+
+
+AnimationObject::KeyFrame::KeyFrame() :
+	time(0),
+	translation(0, 0, 0),
+	scale(1, 1, 1),
+	rotation(0, 0, 0, 1)
+{}
+
+AnimationObject::KeyFrame::~KeyFrame()
+{}
+
+
+float AnimationObject::GetTimeStart()
+{
+	return keyframes.front().time;
+}
+
+float AnimationObject::GetTimeEnd()
+{
+	return keyframes.back().time;
+}
+
+void AnimationObject::interpolate(float t, XMMATRIX& world)
+{
+	// rotation origin
+	XMVECTOR O = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+
+	if (t <= GetTimeStart()) // return first keyframe
+	{
+		XMVECTOR S = XMLoadFloat3(&keyframes.front().scale);
+		XMVECTOR R = XMLoadFloat4(&keyframes.front().rotation);
+		XMVECTOR T = XMLoadFloat3(&keyframes.front().translation);
+
+		world = XMMatrixAffineTransformation(S, O, R, T);
+	}
+	else if (t >= GetTimeEnd()) // return last keyframe
+	{
+		XMVECTOR S = XMLoadFloat3(&keyframes.back().scale);
+		XMVECTOR R = XMLoadFloat4(&keyframes.back().rotation);
+		XMVECTOR T = XMLoadFloat3(&keyframes.back().translation);
+
+		world = XMMatrixAffineTransformation(S, O, R, T);
+	}
+	else // interpolate keyframes
+	{
+		for (UINT i = 0; i < keyframes.size() - 1; ++i)
+		{
+			KeyFrame& a = keyframes[i + 0];
+			KeyFrame& b = keyframes[i + 1];
+
+			if (a.time <= t && t <= b.time)
+			{
+				XMVECTOR Sa = XMLoadFloat3(&a.scale);
+				XMVECTOR Sb = XMLoadFloat3(&b.scale);
+
+				XMVECTOR Ra = XMLoadFloat4(&a.rotation);
+				XMVECTOR Rb = XMLoadFloat4(&b.rotation);
+
+				XMVECTOR Ta = XMLoadFloat3(&a.translation);
+				XMVECTOR Tb = XMLoadFloat3(&b.translation);
+
+				float x = (t - a.time) / (b.time - a.time);
+
+				XMVECTOR S = XMVectorLerp(Sa, Sb, x);
+				XMVECTOR R = XMQuaternionSlerp(Ra, Rb, x);
+				XMVECTOR T = XMVectorLerp(Ta, Tb, x);
+
+				world = XMMatrixAffineTransformation(S, O, R, T);
+				break;
+			}
+		}
+	}
+}
