@@ -169,6 +169,9 @@ bool D3DApp::Init()
 {
 	if (!InitMainWindow()) return false;
 	if (!InitDirect3D()) return false;
+
+	mTextureManager.Init(mDevice);
+
 	return true;
 }
 
@@ -554,33 +557,32 @@ float D3DApp::AspectRatio() const
 	return static_cast<float>(mMainWindowWidth) / static_cast<float>(mMainWindowHeight);
 }
 
-
-void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view)
-{
-	//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
-	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
-	std::wstring path = base + name;
-
-	//if (const char* env_p = std::getenv_s("PATH"))
-	//	std::cout << "Your PATH is: " << env_p << '\n';
-
-	ID3D11Resource* resource = nullptr;
-
-	HR(CreateDDSTextureFromFile(mDevice, path.c_str(), &resource, view));
-
-	// check created texture
-	{
-		ID3D11Texture2D* texture = nullptr;
-		HR(resource->QueryInterface(IID_ID3D11Texture2D, (void**)&texture));
-
-		D3D11_TEXTURE2D_DESC desc;
-		texture->GetDesc(&desc);
-
-		SafeRelease(texture);
-	}
-
-	SafeRelease(resource);
-};
+//void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view)
+//{
+//	//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+//	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+//	std::wstring path = base + name;
+//
+//	//if (const char* env_p = std::getenv_s("PATH"))
+//	//	std::cout << "Your PATH is: " << env_p << '\n';
+//
+//	ID3D11Resource* resource = nullptr;
+//
+//	HR(CreateDDSTextureFromFile(mDevice, path.c_str(), &resource, view));
+//
+//	// check created texture
+//	{
+//		ID3D11Texture2D* texture = nullptr;
+//		HR(resource->QueryInterface(IID_ID3D11Texture2D, (void**)&texture));
+//
+//		D3D11_TEXTURE2D_DESC desc;
+//		texture->GetDesc(&desc);
+//
+//		SafeRelease(texture);
+//	}
+//
+//	SafeRelease(resource);
+//};
 
 void GeometryGenerator::CreateBox(float width, float height, float depth, Mesh& mesh)
 {
@@ -2880,5 +2882,63 @@ void AnimationObject::interpolate(float t, XMMATRIX& world)
 				break;
 			}
 		}
+	}
+}
+
+TextureManager::TextureManager() :
+	mDevice(nullptr)
+{}
+
+TextureManager::~TextureManager()
+{
+	for (auto& [filename, srv] : mSRVs)
+	{
+		SafeRelease(srv);
+	}
+
+	mDevice = nullptr;
+	mSRVs.clear();
+}
+
+void TextureManager::Init(ID3D11Device* device)
+{
+	mDevice = device;
+}
+
+ID3D11ShaderResourceView* TextureManager::CreateSRV(const std::wstring& filename)
+{
+	auto i = mSRVs.find(filename);
+
+	if (i != mSRVs.end())
+	{
+		return i->second;
+	}
+	else
+	{
+		//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+		std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+		std::wstring path = base + filename;
+
+		ID3D11ShaderResourceView* srv;
+		ID3D11Resource* resource = nullptr;
+
+		HR(CreateDDSTextureFromFile(mDevice, path.c_str(), &resource, &srv));
+
+		mSRVs.emplace(filename, srv);
+
+		// check created texture
+		{
+			ID3D11Texture2D* texture = nullptr;
+			HR(resource->QueryInterface(IID_ID3D11Texture2D, (void**)&texture));
+
+			D3D11_TEXTURE2D_DESC desc;
+			texture->GetDesc(&desc);
+
+			SafeRelease(texture);
+		}
+
+		SafeRelease(resource);
+
+		return srv;
 	}
 }

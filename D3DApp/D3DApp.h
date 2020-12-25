@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <vector>
 #include <array>
+#include <map>
 
 #include <glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -117,6 +118,19 @@ public:
 	void rotate(float angle);
 };
 
+class TextureManager
+{
+	ID3D11Device* mDevice;
+	std::map<std::wstring, ID3D11ShaderResourceView*> mSRVs;
+
+public:
+	TextureManager();
+	~TextureManager();
+
+	void Init(ID3D11Device* device);
+	ID3D11ShaderResourceView* CreateSRV(const std::wstring& filename);
+};
+
 class D3DApp
 {
 public:
@@ -136,7 +150,9 @@ public:
 
 	float AspectRatio() const;
 
-	void CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view);
+	//void CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view);
+
+	TextureManager mTextureManager;
 
 protected:
 	bool InitMainWindow();
@@ -342,8 +358,10 @@ public:
 
 	Material mMaterial;
 
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mAlbedoSRV;
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mNormalSRV;
+	//Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mAlbedoSRV;
+	//Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mNormalSRV;
+	ID3D11ShaderResourceView* mAlbedoSRV;
+	ID3D11ShaderResourceView* mNormalSRV;
 
 	Microsoft::WRL::ComPtr<ID3D11VertexShader> mVertexShader;
 	Microsoft::WRL::ComPtr<ID3D11HullShader> mHullShader;
@@ -400,8 +418,10 @@ public:
 		SafeRelease((*mVertexBuffer.GetAddressOf()));
 		SafeRelease((*mIndexBuffer.GetAddressOf()));
 		SafeRelease(mInstancedBuffer);
-		SafeRelease((*mAlbedoSRV.GetAddressOf()));
-		SafeRelease((*mNormalSRV.GetAddressOf()));
+		//SafeRelease((*mAlbedoSRV.GetAddressOf()));
+		//SafeRelease((*mNormalSRV.GetAddressOf()));
+		//SafeRelease(mAlbedoSRV);
+		//SafeRelease(mNormalSRV);
 		SafeRelease((*mVertexShader.GetAddressOf()));
 		SafeRelease((*mGeometryShader.GetAddressOf()));
 		SafeRelease((*mPixelShader.GetAddressOf()));
