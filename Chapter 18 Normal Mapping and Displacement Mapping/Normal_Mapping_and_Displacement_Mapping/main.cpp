@@ -48,7 +48,7 @@ public:
 		XMFLOAT4X4 mWorldInverseTranspose;
 		XMFLOAT4X4 mWorldViewProj;
 		GameObject::Material mMaterial;
-		XMFLOAT4X4 mTexTransform;
+		XMFLOAT4X4 mTexCoordTransform;
 	};
 
 	ID3D11Buffer* mPerObjectCB;
@@ -273,7 +273,7 @@ bool TestApp::Init()
 		mGrid.mIndexStart = mSkull.mIndexStart + mSkull.mMesh.mIndices.size();
 
 		mGrid.mWorld = XMMatrixIdentity();
-		mGrid.mTexTransform = XMMatrixScaling(8, 10, 1);
+		mGrid.mTexCoordTransform = XMMatrixScaling(8, 10, 1);
 
 		mGrid.mMaterial.mAmbient = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
 		mGrid.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -282,8 +282,8 @@ bool TestApp::Init()
 
 		mGrid.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
-		CreateSRV(L"stones.dds", &mGrid.mAlbedoSRV);
-		CreateSRV(L"stones_n.dds", &mGrid.mNormalSRV);
+		mGrid.mAlbedoSRV = mTextureManager.CreateSRV(L"stones.dds");
+		mGrid.mNormalSRV = mTextureManager.CreateSRV(L"stones_n.dds");
 	}
 
 	// build box geometry
@@ -294,7 +294,7 @@ bool TestApp::Init()
 		mBox.mIndexStart = mGrid.mIndexStart + mGrid.mMesh.mIndices.size();
 
 		mBox.mWorld = XMMatrixScaling(3.0f, 1.0f, 3.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f);
-		mBox.mTexTransform = XMMatrixScaling(2, 1, 1);
+		mBox.mTexCoordTransform = XMMatrixScaling(2, 1, 1);
 
 		mBox.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mBox.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -303,8 +303,8 @@ bool TestApp::Init()
 
 		mBox.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
-		CreateSRV(L"floor.dds", &mBox.mAlbedoSRV);
-		CreateSRV(L"floor_n.dds", &mBox.mNormalSRV);
+		mBox.mAlbedoSRV = mTextureManager.CreateSRV(L"floor.dds");
+		mBox.mNormalSRV = mTextureManager.CreateSRV(L"floor_n.dds");
 	}
 
 	// build cylinder geometry
@@ -314,7 +314,7 @@ bool TestApp::Init()
 		mCylinder.mVertexStart = mBox.mVertexStart + mBox.mMesh.mVertices.size();
 		mCylinder.mIndexStart = mBox.mIndexStart + mBox.mMesh.mIndices.size();
 
-		mCylinder.mTexTransform = XMMatrixScaling(1, 2, 1);
+		mCylinder.mTexCoordTransform = XMMatrixScaling(1, 2, 1);
 
 		mCylinder.mMaterial.mAmbient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 		mCylinder.mMaterial.mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -323,8 +323,8 @@ bool TestApp::Init()
 
 		mCylinder.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
-		CreateSRV(L"bricks.dds", &mCylinder.mAlbedoSRV);
-		CreateSRV(L"bricks_n.dds", &mCylinder.mNormalSRV);
+		mCylinder.mAlbedoSRV = mTextureManager.CreateSRV(L"bricks.dds");
+		mCylinder.mNormalSRV = mTextureManager.CreateSRV(L"bricks_n.dds");
 	}
 
 	// build sphere geometry
@@ -369,7 +369,7 @@ bool TestApp::Init()
 		mSky.mRasterizerState = mNoCullRS;
 		mSky.mDepthStencilState = mLessEqualDSS;
 
-		CreateSRV(L"snowcube1024.dds", &mSky.mAlbedoSRV);
+		mSky.mAlbedoSRV = mTextureManager.CreateSRV(L"snowcube1024.dds");
 
 		// VS
 		{
@@ -580,7 +580,7 @@ void TestApp::DrawScene()
 		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
 		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * V * mCamera.mProj);
 		buffer.mMaterial = obj->mMaterial;
-		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexTransform);
+		XMStoreFloat4x4(&buffer.mTexCoordTransform, obj->mTexCoordTransform);
 
 		mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
 
@@ -631,9 +631,9 @@ void TestApp::DrawScene()
 		// textures
 		//if (obj->mAlbedoSRV.Get())
 		{
-			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
-			mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
-			mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+			mContext->PSSetShaderResources(0, 1, &obj->mAlbedoSRV);
+			mContext->DSSetShaderResources(1, 1, &obj->mNormalSRV);
+			mContext->PSSetShaderResources(1, 1, &obj->mNormalSRV);
 		}
 
 		// rasterizer, blend and depth-stencil states
@@ -690,7 +690,7 @@ void TestApp::DrawScene()
 	// draw with reflection
 	{
 		// bind cube map SRV
-		mContext->PSSetShaderResources(2, 1, mSky.mAlbedoSRV.GetAddressOf());
+		mContext->PSSetShaderResources(2, 1, &mSky.mAlbedoSRV);
 
 		DrawGameObject(&mSkull);
 
