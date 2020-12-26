@@ -2218,8 +2218,8 @@ void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfView
 
 			std::vector<D3D_SHADER_MACRO> defines;
 			// spheres and skull don't have an albedo texture
-			defines.push_back({ "ENABLE_TEXTURE",        "0" });
-			defines.push_back({ "ENABLE_ALPHA_CLIPPING", "0" });
+			defines.push_back({ "ENABLE_TEXTURE",        "1" });
+			defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
 			// TODO : enable normap mapping ?
 			defines.push_back({ nullptr, nullptr });
 
