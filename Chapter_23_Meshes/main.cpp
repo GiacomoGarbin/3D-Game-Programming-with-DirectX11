@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <string>
-#include <array>
 #include <sstream>
 
 class TestApp : public D3DApp
@@ -47,7 +46,7 @@ public:
 		XMFLOAT4X4 mWorld;
 		XMFLOAT4X4 mWorldInverseTranspose;
 		XMFLOAT4X4 mWorldViewProj;
-		GameObject::Material mMaterial;
+		Material mMaterial;
 		XMFLOAT4X4 mTexCoordTransform;
 		XMFLOAT4X4 mShadowTransform;
 		XMFLOAT4X4 mWorldViewProjTexture;
@@ -63,6 +62,20 @@ public:
 	GameObject mSphere;
 	GameObject mCylinder;
 	GameObject mSky;
+
+	GameObject mTree;
+	GameObject mBase;
+	GameObject mStairs;
+	GameObject mPillar1;
+	GameObject mPillar2;
+	GameObject mPillar3;
+	GameObject mPillar4;
+	GameObject mRock;
+
+	//std::vector<BasicModelInstance> mModelInstances;
+	//std::vector<BasicModelInstance> mAlphaClippedModelInstances;
+	std::vector<GameObjectInstance> mObjectInstances;
+	std::vector<GameObjectInstance> mAlphaClippedObjectInstances;
 
 	std::array<LightDirectional, 3> mLights;
 	XMFLOAT3 mLightsCache[3];
@@ -89,19 +102,19 @@ TestApp::TestApp() :
 
 	//m4xMSAAEnabled = true;
 
-	mLights[0].mAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[0].mDiffuse = XMFLOAT4(0.7f, 0.7f, 0.6f, 1.0f);
-	mLights[0].mSpecular = XMFLOAT4(0.8f, 0.8f, 0.7f, 1.0f);
-	mLights[0].mDirection = XMFLOAT3(-0.57735f, -0.57735f, -0.57735f);
+	mLights[0].mAmbient = XMFLOAT4(0.6f, 0.6f, 0.6f, 1.0f);
+	mLights[0].mDiffuse = XMFLOAT4(0.8f, 0.7f, 0.7f, 1.0f);
+	mLights[0].mSpecular = XMFLOAT4(0.6f, 0.6f, 0.7f, 1.0f);
+	mLights[0].mDirection = XMFLOAT3(-0.57735f, -0.57735f, 0.57735f);
 
 	mLights[1].mAmbient = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	mLights[1].mDiffuse = XMFLOAT4(0.40f, 0.40f, 0.40f, 1.0f);
-	mLights[1].mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[1].mDirection = XMFLOAT3(-0.707f, 0.707f, 0.0f);
+	mLights[1].mDiffuse = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
+	mLights[1].mSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	mLights[1].mDirection = XMFLOAT3(0.707f, -0.707f, 0.0f);
 
 	mLights[2].mAmbient = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	mLights[2].mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[2].mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
+	mLights[2].mDiffuse = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+	mLights[2].mSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 	mLights[2].mDirection = XMFLOAT3(0.0f, 0.0, -1.0f);
 
 	for (UINT i = 0; i < 3; ++i) mLightsCache[i] = mLights[i].mDirection;
@@ -147,6 +160,15 @@ bool TestApp::Init()
 		mCylinder.mVertexShader = shader;
 		mSphere.mVertexShader = shader;
 
+		mTree.mVertexShader = shader;
+		mBase.mVertexShader = shader;
+		mStairs.mVertexShader = shader;
+		mPillar1.mVertexShader = shader;
+		mPillar2.mVertexShader = shader;
+		mPillar3.mVertexShader = shader;
+		mPillar4.mVertexShader = shader;
+		mRock.mVertexShader = shader;
+
 		// input layout
 		{
 			std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
@@ -166,6 +188,15 @@ bool TestApp::Init()
 			mBox.mInputLayout = layout;
 			mCylinder.mInputLayout = layout;
 			mSphere.mInputLayout = layout;
+
+			mTree.mInputLayout = layout;
+			mBase.mInputLayout = layout;
+			mStairs.mInputLayout = layout;
+			mPillar1.mInputLayout = layout;
+			mPillar2.mInputLayout = layout;
+			mPillar3.mInputLayout = layout;
+			mPillar4.mInputLayout = layout;
+			mRock.mInputLayout = layout;
 		}
 	}
 
@@ -219,6 +250,15 @@ bool TestApp::Init()
 		mGrid.mPixelShader = shader;
 		mBox.mPixelShader = shader;
 		mCylinder.mPixelShader = shader;
+
+		//mTree.mPixelShader = shader;
+		mBase.mPixelShader = shader;
+		mStairs.mPixelShader = shader;
+		mPillar1.mPixelShader = shader;
+		mPillar2.mPixelShader = shader;
+		mPillar3.mPixelShader = shader;
+		mPillar4.mPixelShader = shader;
+		mRock.mPixelShader = shader;
 	}
 
 	// build per frame costant buffer
@@ -320,8 +360,8 @@ bool TestApp::Init()
 	{
 		GeometryGenerator::CreateGrid(20, 30, 50, 40, mGrid.mMesh);
 
-		mGrid.mVertexStart = mSkull.mVertexStart + mSkull.mMesh.mVertices.size();
-		mGrid.mIndexStart = mSkull.mIndexStart + mSkull.mMesh.mIndices.size();
+/*		mGrid.mVertexStart = mSkull.mVertexStart + mSkull.mMesh.mVertices.size();
+		mGrid.mIndexStart = mSkull.mIndexStart + mSkull.mMesh.mIndices.size()*/;
 
 		mGrid.mWorld = XMMatrixIdentity();
 		mGrid.mTexCoordTransform = XMMatrixScaling(8, 10, 1);
@@ -333,16 +373,16 @@ bool TestApp::Init()
 
 		//mGrid.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
-		CreateSRV(L"stones.dds", &mGrid.mAlbedoSRV);
-		CreateSRV(L"stones_n.dds", &mGrid.mNormalSRV);
+		mGrid.mAlbedoSRV = mTextureManager.CreateSRV(L"stones.dds");
+		mGrid.mNormalSRV = mTextureManager.CreateSRV(L"stones_n.dds");
 	}
 
 	// build box geometry
 	{
 		GeometryGenerator::CreateBox(1, 1, 1, mBox.mMesh);
 
-		mBox.mVertexStart = mGrid.mVertexStart + mGrid.mMesh.mVertices.size();
-		mBox.mIndexStart = mGrid.mIndexStart + mGrid.mMesh.mIndices.size();
+		//mBox.mVertexStart = mGrid.mVertexStart + mGrid.mMesh.mVertices.size();
+		//mBox.mIndexStart = mGrid.mIndexStart + mGrid.mMesh.mIndices.size();
 
 		mBox.mWorld = XMMatrixScaling(3.0f, 1.0f, 3.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f);
 		mBox.mTexCoordTransform = XMMatrixScaling(2, 1, 1);
@@ -354,16 +394,16 @@ bool TestApp::Init()
 
 		//mBox.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
-		CreateSRV(L"floor.dds", &mBox.mAlbedoSRV);
-		CreateSRV(L"floor_n.dds", &mBox.mNormalSRV);
+		mBox.mAlbedoSRV = mTextureManager.CreateSRV(L"floor.dds");
+		mBox.mNormalSRV = mTextureManager.CreateSRV(L"floor_n.dds");
 	}
 
 	// build cylinder geometry
 	{
 		GeometryGenerator::CreateCylinder(0.5f, 0.5f, 3, 15, 15, mCylinder.mMesh);
 
-		mCylinder.mVertexStart = mBox.mVertexStart + mBox.mMesh.mVertices.size();
-		mCylinder.mIndexStart = mBox.mIndexStart + mBox.mMesh.mIndices.size();
+		//mCylinder.mVertexStart = mBox.mVertexStart + mBox.mMesh.mVertices.size();
+		//mCylinder.mIndexStart = mBox.mIndexStart + mBox.mMesh.mIndices.size();
 
 		mCylinder.mTexCoordTransform = XMMatrixScaling(1, 2, 1);
 
@@ -374,16 +414,16 @@ bool TestApp::Init()
 
 		//mCylinder.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
-		CreateSRV(L"bricks.dds", &mCylinder.mAlbedoSRV);
-		CreateSRV(L"bricks_n.dds", &mCylinder.mNormalSRV);
+		mCylinder.mAlbedoSRV = mTextureManager.CreateSRV(L"bricks.dds");
+		mCylinder.mNormalSRV = mTextureManager.CreateSRV(L"bricks_n.dds");
 	}
 
 	// build sphere geometry
 	{
 		GeometryGenerator::CreateSphere(0.5f, 3, mSphere.mMesh);
 
-		mSphere.mVertexStart = mCylinder.mVertexStart + mCylinder.mMesh.mVertices.size();
-		mSphere.mIndexStart = mCylinder.mIndexStart + mCylinder.mMesh.mIndices.size();
+		//mSphere.mVertexStart = mCylinder.mVertexStart + mCylinder.mMesh.mVertices.size();
+		//mSphere.mIndexStart = mCylinder.mIndexStart + mCylinder.mMesh.mIndices.size();
 
 		mSphere.mMaterial.mAmbient = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
 		mSphere.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
@@ -414,13 +454,13 @@ bool TestApp::Init()
 	{
 		GeometryGenerator::CreateSphere(5000, 3, mSky.mMesh);
 
-		mSky.mVertexStart = mSphere.mVertexStart + mSphere.mMesh.mVertices.size();
-		mSky.mIndexStart = mSphere.mIndexStart + mSphere.mMesh.mIndices.size();
+		//mSky.mVertexStart = mSphere.mVertexStart + mSphere.mMesh.mVertices.size();
+		//mSky.mIndexStart = mSphere.mIndexStart + mSphere.mMesh.mIndices.size();
 
 		mSky.mRasterizerState = mNoCullRS;
 		mSky.mDepthStencilState = mLessEqualDSS;
 
-		CreateSRV(L"desertcube1024.dds", &mSky.mAlbedoSRV);
+		mSky.mAlbedoSRV = mTextureManager.CreateSRV(L"desertcube1024.dds");
 
 		// VS
 		{
@@ -453,28 +493,124 @@ bool TestApp::Init()
 		}
 	}
 
+	// objects
+	{
+		mTree.LoadModel(mDevice, mTextureManager, "tree.m3d");
+		mTree.mRasterizerState = mNoCullRS;
+
+		// PS
+		{
+			std::wstring path = base + proj + L"PS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			defines.push_back({ "ENABLE_TEXTURE",         "1" });
+			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
+			defines.push_back({ "ENABLE_NORMAL_MAPPING",  "1" });
+			defines.push_back({ "ENABLE_ALPHA_CLIPPING",  "1" });
+			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
+			defines.push_back({ "ENABLE_REFLECTION",      "0" });
+			defines.push_back({ "ENABLE_FOG",             "0" });
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mTree.mPixelShader));
+		}
+
+		mBase.LoadModel(mDevice, mTextureManager, "base.m3d");
+		mStairs.LoadModel(mDevice, mTextureManager, "stairs.m3d");
+		mPillar1.LoadModel(mDevice, mTextureManager, "pillar1.m3d");
+		mPillar2.LoadModel(mDevice, mTextureManager, "pillar2.m3d");
+		mPillar3.LoadModel(mDevice, mTextureManager, "pillar5.m3d");
+		mPillar4.LoadModel(mDevice, mTextureManager, "pillar6.m3d");
+		mRock.LoadModel(mDevice, mTextureManager, "rock.m3d");
+	}
+
+	// object instances
+	{
+		GameObjectInstance TreeInstance;
+		TreeInstance.obj = &mTree;
+		//mAlphaClippedObjectInstances.push_back(TreeInstance);
+		mObjectInstances.push_back(TreeInstance);
+
+		GameObjectInstance BaseInstance;
+		BaseInstance.obj = &mBase;
+		mObjectInstances.push_back(BaseInstance);
+
+		GameObjectInstance StairsInstance;
+		StairsInstance.obj = &mStairs;
+		StairsInstance.world = XMMatrixRotationY(0.5f * XM_PI) * XMMatrixTranslation(0.0f, -2.5f, -12.0f);
+		mObjectInstances.push_back(StairsInstance);
+
+		GameObjectInstance Pillar1Instance;
+		Pillar1Instance.obj = &mPillar1;
+		Pillar1Instance.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(-5.0f, 1.5f, +5.0f);
+		mObjectInstances.push_back(Pillar1Instance);
+
+		GameObjectInstance Pillar2Instance;
+		Pillar2Instance.obj = &mPillar2;
+		Pillar2Instance.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(+5.0f, 1.5f, +5.0f);
+		mObjectInstances.push_back(Pillar2Instance);
+
+		GameObjectInstance Pillar3Instance;
+		Pillar3Instance.obj = &mPillar3;
+		Pillar3Instance.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(+5.0f, 1.5f, -5.0f);
+		mObjectInstances.push_back(Pillar3Instance);
+
+		GameObjectInstance Pillar4Instance;
+		Pillar4Instance.obj = &mPillar4;
+		Pillar4Instance.world = XMMatrixScaling(1.0f, 1.0f, 1.0f) * XMMatrixTranslation(-5.0f, 1.0f, -5.0f);
+		mObjectInstances.push_back(Pillar4Instance);
+
+		GameObjectInstance RockInstance1;
+		RockInstance1.obj = &mRock;
+		RockInstance1.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(-1.0f, 1.4f, -7.0f);
+		mObjectInstances.push_back(RockInstance1);
+
+		GameObjectInstance RockInstance2;
+		RockInstance2.obj = &mRock;
+		RockInstance2.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(+5.0f, 1.2f, -2.0f);
+		mObjectInstances.push_back(RockInstance2);
+
+		GameObjectInstance RockInstance3;
+		RockInstance3.obj = &mRock;
+		RockInstance3.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(-4.0f, 1.3f, +3.0f);
+		mObjectInstances.push_back(RockInstance3);
+	}
+
 	// create vertex and input buffers
 	{
-		std::array<GameObject*, 6> objects =
+		std::array<GameObject*, 14> objects =
 		{
 			&mSkull,
 			&mGrid,
 			&mBox,
 			&mCylinder,
 			&mSphere,
-			&mSky
+			&mSky,
+
+			&mTree,
+			&mBase,
+			&mStairs,
+			&mPillar1,
+			&mPillar2,
+			&mPillar3,
+			&mPillar4,
+			&mRock
 		};
 
 		std::vector<GeometryGenerator::Vertex> vertices;
 		std::vector<UINT> indices;
 
-		auto AddVertex = [&vertices](const GameObject& obj) -> void
+		auto AddVertex = [&vertices](GameObject& obj) -> void
 		{
+			obj.mVertexStart = vertices.size();
 			vertices.insert(vertices.end(), obj.mMesh.mVertices.begin(), obj.mMesh.mVertices.end());
 		};
 
-		auto AddIndex = [&indices](const GameObject& obj) -> void
+		auto AddIndex = [&indices](GameObject& obj) -> void
 		{
+			obj.mIndexStart = indices.size();
 			indices.insert(indices.end(), obj.mMesh.mIndices.begin(), obj.mMesh.mIndices.end());
 		};
 
@@ -558,6 +694,41 @@ bool TestApp::Init()
 	mSSAO.Init(mDevice, mMainWindowWidth, mMainWindowHeight, mCamera.mFovAngleY, mCamera.mFarZ);
 	mSSAO.mDebugQuad.Init(mDevice, AspectRatio(), DebugQuad::ScreenCorner::BottomRight, AspectRatio());
 
+	// scene bounds
+	if (!mObjectInstances.empty() || !mAlphaClippedObjectInstances.empty())
+	{
+		XMFLOAT3 minima = XMFLOAT3(FLT_MAX, FLT_MAX, FLT_MAX);
+		XMFLOAT3 maxima = XMFLOAT3(FLT_MIN, FLT_MIN, FLT_MIN);
+		XMVECTOR min = XMLoadFloat3(&minima);
+		XMVECTOR max = XMLoadFloat3(&maxima);
+
+		for (const auto& instance : mObjectInstances)
+		{
+			for (const auto& vertex : instance.obj->mMesh.mVertices)
+			{
+				XMVECTOR P = XMLoadFloat3(&vertex.mPosition);
+				min = XMVectorMin(min, P);
+				max = XMVectorMax(max, P);
+			}
+		}
+
+		for (const auto& instance : mAlphaClippedObjectInstances)
+		{
+			for (const auto& vertex : instance.obj->mMesh.mVertices)
+			{
+				XMVECTOR P = XMLoadFloat3(&vertex.mPosition);
+				min = XMVectorMin(min, P);
+				max = XMVectorMax(max, P);
+			}
+		}
+
+		XMStoreFloat3(&mSceneBounds.Center, (min + max) * 0.5f);
+
+		XMVECTOR extents = (max - min) * 0.5f;
+		float RadiusSquared = XMVectorGetByIndex(XMVector3Dot(extents, extents), 0);
+		mSceneBounds.Radius = std::sqrt(RadiusSquared);
+	}
+
 	return true;
 }
 
@@ -593,33 +764,36 @@ void TestApp::UpdateScene(float dt)
 		mCamera.strafe(+10 * dt);
 	}
 
-	mLightAngle += 0.1f * dt;
+	//// animate lights
+	//{
+	//	mLightAngle += 0.1f * dt;
 
-	XMMATRIX R = XMMatrixRotationY(mLightAngle);
+	//	XMMATRIX R = XMMatrixRotationY(mLightAngle);
 
-	for (UINT i = 0; i < 3; ++i)
-	{
-		XMVECTOR D = XMLoadFloat3(&mLightsCache[i]);
-		D = XMVector3TransformNormal(D, R);
-		XMStoreFloat3(&mLights[i].mDirection, D);
-	}
+	//	for (UINT i = 0; i < 3; ++i)
+	//	{
+	//		XMVECTOR D = XMLoadFloat3(&mLightsCache[i]);
+	//		D = XMVector3TransformNormal(D, R);
+	//		XMStoreFloat3(&mLights[i].mDirection, D);
+	//	}
+	//}
 
 	// build shadow transform
 	mShadowMap.BuildTranform(mLights[0].mDirection, mSceneBounds);
 
 	mCamera.UpdateView();
 
-	// update skull animation
-	{
-		mSkull.mAnimation.mCurrTime += dt;
+	//// update skull animation
+	//{
+	//	mSkull.mAnimation.mCurrTime += dt;
 
-		if (mSkull.mAnimation.mCurrTime >= mSkull.mAnimation.GetTimeEnd())
-		{
-			mSkull.mAnimation.mCurrTime = 0;
-		}
+	//	if (mSkull.mAnimation.mCurrTime >= mSkull.mAnimation.GetTimeEnd())
+	//	{
+	//		mSkull.mAnimation.mCurrTime = 0;
+	//	}
 
-		mSkull.mAnimation.interpolate(mSkull.mAnimation.mCurrTime, mSkull.mWorld);
-	}
+	//	mSkull.mAnimation.interpolate(mSkull.mAnimation.mCurrTime, mSkull.mWorld);
+	//}
 }
 
 void TestApp::DrawSceneToShadowMap()
@@ -676,7 +850,7 @@ void TestApp::DrawSceneToShadowMap()
 
 		// textures
 		{
-			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
+			mContext->PSSetShaderResources(0, 1, &obj->mAlbedoSRV);
 			//mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
 			//mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
 		}
@@ -705,38 +879,101 @@ void TestApp::DrawSceneToShadowMap()
 		mContext->PSSetShaderResources(0, 2, NullSRV);
 	};
 
-	// draw without reflection
+	//// draw without reflection
+	//{
+	//	DrawGameObject(&mGrid);
+	//	DrawGameObject(&mBox);
+
+	//	for (UINT i = 0; i < 5; ++i)
+	//	{
+	//		mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
+	//		DrawGameObject(&mCylinder);
+	//		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
+	//		DrawGameObject(&mCylinder);
+	//	}
+	//}
+
+	//// draw with reflection
+	//{
+	//	// bind cube map SRV
+	//	mContext->PSSetShaderResources(2, 1, &mSky.mAlbedoSRV);
+
+	//	DrawGameObject(&mSkull);
+
+	//	for (UINT i = 0; i < 5; ++i)
+	//	{
+	//		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
+	//		DrawGameObject(&mSphere);
+	//		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
+	//		DrawGameObject(&mSphere);
+	//	}
+
+	//	// unbind SRV
+	//	ID3D11ShaderResourceView* const NullSRV = nullptr;
+	//	mContext->PSSetShaderResources(2, 1, &NullSRV);
+	//}
+
+	for (auto& instance : mObjectInstances)
 	{
-		DrawGameObject(&mGrid);
-		DrawGameObject(&mBox);
+		GameObject* obj = instance.obj;
 
-		for (UINT i = 0; i < 5; ++i)
+		// shaders
 		{
-			mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
-			DrawGameObject(&mCylinder);
-			mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
-			DrawGameObject(&mCylinder);
-		}
-	}
-
-	// draw with reflection
-	{
-		// bind cube map SRV
-		mContext->PSSetShaderResources(2, 1, mSky.mAlbedoSRV.GetAddressOf());
-
-		DrawGameObject(&mSkull);
-
-		for (UINT i = 0; i < 5; ++i)
-		{
-			mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
-			DrawGameObject(&mSphere);
-			mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
-			DrawGameObject(&mSphere);
+			mContext->VSSetShader(mShadowMap.GetVS(), nullptr, 0);
+			mContext->PSSetShader(mShadowMap.GetPS(), nullptr, 0);
 		}
 
-		// unbind SRV
-		ID3D11ShaderResourceView* const NullSRV = nullptr;
-		mContext->PSSetShaderResources(2, 1, &NullSRV);
+		// input layout
+		mContext->IASetInputLayout(mShadowMap.GetIL());
+
+		// primitive topology
+		mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
+
+		// vertex and index buffers
+		{
+			UINT stride = sizeof(GeometryGenerator::Vertex);
+			UINT offset = 0;
+
+			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
+			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+
+		// rasterizer, blend and depth-stencil states
+		{
+			mContext->RSSetState(mShadowMap.GetRS());
+
+			FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+			mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+
+			mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+		}
+
+		// per object constant buffer
+		{
+			ShadowMap::PerObjectCB buffer;
+			XMStoreFloat4x4(&buffer.mWorldViewProj, instance.world * ViewProj);
+			XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexCoordTransform);
+			mContext->UpdateSubresource(mShadowMap.GetCB(), 0, nullptr, &buffer, 0, 0);
+			mContext->VSSetConstantBuffers(0, 1, &mShadowMap.GetCB());
+		}
+		
+		for (UINT i = 0; i < obj->mSubsets.size(); ++i)
+		{
+			// bind SRVs
+			{
+				mContext->PSSetShaderResources(0, 1, &obj->mDiffuseMapSRVs[i]);
+			}
+
+			// draw call
+			const Subset& subset = obj->mSubsets[i];
+			mContext->DrawIndexed(subset.FaceCount * 3, obj->mIndexStart + subset.FaceStart * 3, obj->mVertexStart);
+
+			// unbind SRVs
+			{
+				ID3D11ShaderResourceView* const NullSRVs[1] = { nullptr };
+				mContext->PSSetShaderResources(0, 1, NullSRVs);
+			}
+		}
 	}
 }
 
@@ -795,7 +1032,7 @@ void TestApp::DrawSceneToSSAONormalDepthMap()
 
 		// textures
 		{
-			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
+			mContext->PSSetShaderResources(0, 1, &obj->mAlbedoSRV);
 
 			// TODO : add normal mapping ?
 
@@ -827,23 +1064,92 @@ void TestApp::DrawSceneToSSAONormalDepthMap()
 		mContext->PSSetShaderResources(0, 1, NullSRV);
 	};
 
-	DrawGameObject(&mGrid);
-	DrawGameObject(&mBox);
+	//DrawGameObject(&mGrid);
+	//DrawGameObject(&mBox);
 
-	for (UINT i = 0; i < 5; ++i)
+	//for (UINT i = 0; i < 5; ++i)
+	//{
+	//	mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
+	//	DrawGameObject(&mCylinder);
+	//	mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
+	//	DrawGameObject(&mCylinder);
+
+	//	mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
+	//	DrawGameObject(&mSphere);
+	//	mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
+	//	DrawGameObject(&mSphere);
+	//}
+
+	//DrawGameObject(&mSkull);
+
+	for (auto& instance : mObjectInstances)
 	{
-		mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
-		DrawGameObject(&mCylinder);
-		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
-		DrawGameObject(&mCylinder);
+		GameObject* obj = instance.obj;
 
-		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
-		DrawGameObject(&mSphere);
-		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
-		DrawGameObject(&mSphere);
+		// shaders
+		{
+			mContext->VSSetShader(mSSAO.GetNormalDepthVS(), nullptr, 0);
+			mContext->PSSetShader(mSSAO.GetNormalDepthPS(), nullptr, 0);
+		}
+
+		// input layout
+		mContext->IASetInputLayout(mSSAO.GetNormalDepthIL());
+
+		// primitive topology
+		mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
+
+		// vertex and index buffers
+		{
+			UINT stride = sizeof(GeometryGenerator::Vertex);
+			UINT offset = 0;
+
+			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
+			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+
+		// rasterizer, blend and depth-stencil states
+		{
+			mContext->RSSetState(obj->mRasterizerState.Get());
+
+			FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+			mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+
+			mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+		}
+
+		// per object constant buffer
+		{
+			XMMATRIX view = XMLoadFloat4x4(&mCamera.mView);
+			XMMATRIX WorldView = instance.world * view;
+
+			SSAO::NormalDepthCB buffer;
+			XMStoreFloat4x4(&buffer.WorldView, WorldView);
+			XMStoreFloat4x4(&buffer.WorldViewProj, WorldView * mCamera.mProj);
+			XMStoreFloat4x4(&buffer.WorldInverseTransposeView, GameMath::InverseTranspose(instance.world) * view);
+			XMStoreFloat4x4(&buffer.TexCoordTransform, obj->mTexCoordTransform);
+			mContext->UpdateSubresource(mSSAO.GetNormalDepthCB(), 0, nullptr, &buffer, 0, 0);
+			mContext->VSSetConstantBuffers(0, 1, &mSSAO.GetNormalDepthCB());
+		}
+
+		for (UINT i = 0; i < obj->mSubsets.size(); ++i)
+		{
+			// bind SRVs
+			{
+				mContext->PSSetShaderResources(0, 1, &obj->mDiffuseMapSRVs[i]);
+				//mContext->PSSetShaderResources(1, 1, &obj->mNormalMapSRVs[i]);
+			}
+
+			// draw call
+			const Subset& subset = obj->mSubsets[i];
+			mContext->DrawIndexed(subset.FaceCount * 3, obj->mIndexStart + subset.FaceStart * 3, obj->mVertexStart);
+
+			// unbind SRVs
+			{
+				ID3D11ShaderResourceView* const NullSRVs[2] = { nullptr, nullptr };
+				mContext->PSSetShaderResources(0, 2, NullSRVs);
+			}
+		}
 	}
-
-	DrawGameObject(&mSkull);
 }
 
 void TestApp::DrawScene()
@@ -853,7 +1159,6 @@ void TestApp::DrawScene()
 
 	// bind shadow map dsv and set null render target
 	mShadowMap.BindDSVAndSetNullRenderTarget(mContext);
-
 	// draw scene to shadow map
 	DrawSceneToShadowMap();
 
@@ -884,13 +1189,12 @@ void TestApp::DrawScene()
 	mContext->RSSetViewports(1, &mViewport);
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
-	//mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 	//mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
 
 	// bind shadow map and ambient map as SRV
 	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
 	mContext->PSSetShaderResources(4, 1, &mSSAO.GetAmbientMapSRV());
-	//mContext->PSSetShaderResources(4, 1, mSSAO.GetAmbientMapSRV().GetAddressOf());
 
 	auto SetPerFrameCB = [this]() -> void
 	{
@@ -913,7 +1217,7 @@ void TestApp::DrawScene()
 		mContext->UpdateSubresource(mPerFrameCB, 0, 0, &buffer, 0, 0);
 
 		mContext->VSSetConstantBuffers(1, 1, &mPerFrameCB);
-		mContext->DSSetConstantBuffers(1, 1, &mPerFrameCB);
+		//mContext->DSSetConstantBuffers(1, 1, &mPerFrameCB);
 		mContext->PSSetConstantBuffers(1, 1, &mPerFrameCB);
 	};
 
@@ -925,9 +1229,9 @@ void TestApp::DrawScene()
 		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
 		XMMATRIX T
 		(
-			+0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, -0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
 			+0.5f, +0.5f, 0.0f, 1.0f
 		);
 
@@ -988,9 +1292,9 @@ void TestApp::DrawScene()
 
 		// bind SRVs
 		{
-			mContext->PSSetShaderResources(0, 1, obj->mAlbedoSRV.GetAddressOf());
-			mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
-			mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+			mContext->PSSetShaderResources(0, 1, &obj->mAlbedoSRV);
+			mContext->DSSetShaderResources(1, 1, &obj->mNormalSRV);
+			mContext->PSSetShaderResources(1, 1, &obj->mNormalSRV);
 		}
 
 		// rasterizer, blend and depth-stencil states
@@ -1036,41 +1340,148 @@ void TestApp::DrawScene()
 
 	SetPerFrameCB();
 
-	// draw without reflection
+	// draw opache objects
+	for (auto& instance : mObjectInstances)
 	{
-		DrawGameObject(&mGrid);
-		DrawGameObject(&mBox);
+		GameObject* obj = instance.obj;
 
-		for (UINT i = 0; i < 5; ++i)
+		// shaders
 		{
-			mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
-			DrawGameObject(&mCylinder);
-			mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
-			DrawGameObject(&mCylinder);
+			mContext->VSSetShader(obj->mVertexShader.Get(), nullptr, 0);
+			mContext->PSSetShader(obj->mPixelShader.Get(), nullptr, 0);
+		}
+
+		// input layout
+		mContext->IASetInputLayout(obj->mInputLayout.Get());
+
+		// primitive topology
+		mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
+
+		// vertex and index buffers
+		{
+			UINT stride = sizeof(GeometryGenerator::Vertex);
+			UINT offset = 0;
+
+			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
+			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		}
+
+		// rasterizer, blend and depth-stencil states
+		{
+			if (IsKeyPressed(GLFW_KEY_1))
+			{
+				mContext->RSSetState(mWireframeRS.Get());
+			}
+			else
+			{
+				mContext->RSSetState(obj->mRasterizerState.Get());
+			}
+
+			FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+			mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+
+			//if (obj->mDepthStencilState.Get() != nullptr || IsKeyPressed(GLFW_KEY_1))
+			//{
+				mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+			//}
+			//else
+			//{
+			//	mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
+			//}
+		}
+
+		XMMATRIX W = instance.world;
+		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
+		XMMATRIX WorldViewProj = W * V * mCamera.mProj;
+		XMMATRIX S = XMLoadFloat4x4(&mShadowMap.mShadowTransform);
+		XMMATRIX WorldInverseTranspose = GameMath::InverseTranspose(W);
+
+		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
+		XMMATRIX T
+		(
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
+			+0.5f, +0.5f, 0.0f, 1.0f
+		);
+
+		for (UINT i = 0; i < obj->mSubsets.size(); ++i)
+		{
+			// per object constant buffer
+			{
+				PerObjectCB buffer;
+				XMStoreFloat4x4(&buffer.mWorld, W);
+				XMStoreFloat4x4(&buffer.mWorldInverseTranspose, WorldInverseTranspose);
+				XMStoreFloat4x4(&buffer.mWorldViewProj, WorldViewProj);
+				buffer.mMaterial = instance.obj->mMaterials[i];
+				XMStoreFloat4x4(&buffer.mTexCoordTransform, obj->mTexCoordTransform);
+				XMStoreFloat4x4(&buffer.mShadowTransform, W * S);
+				XMStoreFloat4x4(&buffer.mWorldViewProjTexture, WorldViewProj* T);
+
+				mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
+
+				mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
+				mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
+			}
+
+			// bind SRVs
+			{
+				mContext->PSSetShaderResources(0, 1, &obj->mDiffuseMapSRVs[i]);
+				mContext->PSSetShaderResources(1, 1, &obj->mNormalMapSRVs[i]);
+			}
+
+			// draw call
+			const Subset& subset = obj->mSubsets[i];
+			mContext->DrawIndexed(subset.FaceCount * 3, obj->mIndexStart + subset.FaceStart * 3, obj->mVertexStart);
+
+
+			// unbind SRVs
+			{
+				ID3D11ShaderResourceView* const NullSRVs[2] = { nullptr, nullptr };
+				mContext->PSSetShaderResources(0, 2, NullSRVs);
+			}
 		}
 	}
 
-	// turn off tessellation
+	// draw transparent objects
+	{}
 
-	// draw with reflection
-	{
-		// bind cube map SRV
-		mContext->PSSetShaderResources(2, 1, mSky.mAlbedoSRV.GetAddressOf());
 
-		DrawGameObject(&mSkull);
+	//// draw without reflection
+	//{
+	//	DrawGameObject(&mGrid);
+	//	DrawGameObject(&mBox);
 
-		for (UINT i = 0; i < 5; ++i)
-		{
-			mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
-			DrawGameObject(&mSphere);
-			mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
-			DrawGameObject(&mSphere);
-		}
+	//	for (UINT i = 0; i < 5; ++i)
+	//	{
+	//		mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
+	//		DrawGameObject(&mCylinder);
+	//		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
+	//		DrawGameObject(&mCylinder);
+	//	}
+	//}
 
-		// unbind SRV
-		ID3D11ShaderResourceView* const NullSRV = nullptr;
-		mContext->PSSetShaderResources(2, 1, &NullSRV);
-	}
+	//// turn off tessellation
+
+	//// draw with reflection
+	//{
+	//	// bind cube map SRV
+	//	mContext->PSSetShaderResources(2, 1, &mSky.mAlbedoSRV);
+
+	//	DrawGameObject(&mSkull);
+
+	//	for (UINT i = 0; i < 5; ++i)
+	//	{
+	//		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
+	//		DrawGameObject(&mSphere);
+	//		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
+	//		DrawGameObject(&mSphere);
+	//	}
+
+	//	// unbind SRV
+	//	ID3D11ShaderResourceView* const NullSRV = nullptr;
+	//	mContext->PSSetShaderResources(2, 1, &NullSRV);
+	//}
 
 	if (IsKeyPressed(GLFW_KEY_2))
 	{

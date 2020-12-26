@@ -27,6 +27,7 @@ using namespace DirectX;
 #include <wrl/client.h>
 //using namespace Microsoft::WRL;
 
+#define SafeDelete(obj) { delete obj; obj = nullptr; }
 #define SafeRelease(obj) { if (obj) { obj->Release(); obj = nullptr; } }
 
 #ifdef _DEBUG
@@ -212,7 +213,7 @@ public:
 
 		Vertex(float Px, float Py, float Pz,
 			   float Nx, float Ny, float Nz,
-			   float Tx, float Ty, float Tz,
+			   float Tx, float Ty, float Tz, // float Tw,
 			   float Tu, float Tv) :
 			mPosition(Px, Py, Pz),
 			mNormal(Nx, Ny, Nz),
@@ -303,6 +304,16 @@ public:
 	static XMMATRIX InverseTranspose(XMMATRIX M);
 };
 
+struct Material
+{
+	Material() { ZeroMemory(this, sizeof(this)); }
+
+	XMFLOAT4 mAmbient;
+	XMFLOAT4 mDiffuse;
+	XMFLOAT4 mSpecular;
+	XMFLOAT4 mReflect;
+};
+
 class AnimationObject
 {
 	struct KeyFrame
@@ -331,6 +342,23 @@ public:
 	void interpolate(float t, XMMATRIX& world);
 };
 
+struct Subset
+{
+	UINT id;
+	UINT VertexStart;
+	UINT VertexCount;
+	UINT FaceStart;
+	UINT FaceCount;
+
+	Subset() :
+		id(-1),
+		VertexStart(0),
+		VertexCount(0),
+		FaceStart(0),
+		FaceCount(0)
+	{}
+};
+
 class GameObject
 {
 public:
@@ -345,16 +373,6 @@ public:
 
 	XMMATRIX mWorld;
 	XMMATRIX mTexCoordTransform;
-
-	struct Material
-	{
-		Material() { ZeroMemory(this, sizeof(this)); }
-
-		XMFLOAT4 mAmbient;
-		XMFLOAT4 mDiffuse;
-		XMFLOAT4 mSpecular;
-		XMFLOAT4 mReflect;
-	};
 
 	Material mMaterial;
 
@@ -384,10 +402,15 @@ public:
 
 	ID3D11Buffer* mInstancedBuffer;
 	std::vector<InstancedData> mInstances;
-	
+
 	UINT mVisibleInstanceCount;
 
 	AnimationObject mAnimation;
+
+	std::vector<Material> mMaterials;
+	std::vector<ID3D11ShaderResourceView*> mDiffuseMapSRVs;
+	std::vector<ID3D11ShaderResourceView*> mNormalMapSRVs;
+	std::vector<Subset> mSubsets;
 
 	GameObject() :
 		mVertexBuffer(nullptr),
@@ -430,8 +453,93 @@ public:
 		SafeRelease((*mBlendState.GetAddressOf()));
 		SafeRelease((*mDepthStencilState.GetAddressOf()));
 	}
+
+	void LoadModel(ID3D11Device* device, TextureManager& manager, const std::string& filename);
 };
 
+struct GameObjectInstance
+{
+	GameObject* obj;
+	XMMATRIX world;
+
+	GameObjectInstance() :
+		obj(nullptr),
+		world(XMMatrixIdentity())
+	{}
+};
+
+class MeshGeometry
+{
+public:
+	MeshGeometry();
+	~MeshGeometry();
+
+	void SetVertexBuffer(ID3D11Device* device, const GeometryGenerator::Vertex* vertices, UINT count);
+	void SetIndexBuffer(ID3D11Device* device, const UINT* indices, UINT count);
+	void SetSubsetTable(const std::vector<Subset>& subsets);
+
+	void draw(ID3D11DeviceContext* context, UINT SubsetID);
+
+private:
+	ID3D11Buffer* mVertexBuffer;
+	ID3D11Buffer* mIndexBuffer;
+
+	std::vector<Subset> mSubsetTable;
+};
+
+struct Model3DMaterial
+{
+	Material material;
+	bool AlphaClip;
+	std::string EffectName;
+	std::wstring DiffuseMapFileName;
+	std::wstring NormalMapFileName;
+};
+
+class Model3DLoader
+{
+public:
+	bool load(const std::string& filename,
+			  std::vector<GeometryGenerator::Vertex>& vertices,
+			  std::vector<UINT>& indices,
+			  std::vector<Subset>& subsets,
+			  std::vector<Model3DMaterial>& materials);
+
+	bool load(const std::string& filename, TextureManager& manager, GameObject& obj);
+
+private:
+	void LoadVertices(std::ifstream& ifs, UINT count, std::vector<GeometryGenerator::Vertex>& vertices);
+	void LoadTriangles(std::ifstream& ifs, UINT count, std::vector<UINT>& indices);
+	void LoadSubsets(std::ifstream& ifs, UINT count, std::vector<Subset>& subsets);
+	void LoadMaterials(std::ifstream& ifs, UINT count, std::vector<Model3DMaterial>& materials);
+};
+
+class BasicModel
+{
+public:
+	std::vector<Model3DMaterial> mMaterials;
+	std::vector<ID3D11ShaderResourceView*> mDiffuseMapSRVs;
+	std::vector<ID3D11ShaderResourceView*> mNormalMapSRVs;
+
+	std::vector<GeometryGenerator::Vertex> mVertices;
+	std::vector<UINT> mIndices;
+	std::vector<Subset> mSubsets;
+
+	MeshGeometry mMesh;
+
+	BasicModel(ID3D11Device* device, TextureManager& manager, const std::string& filename);
+};
+
+struct BasicModelInstance
+{
+	BasicModel* model;
+	XMMATRIX world;
+
+	BasicModelInstance() :
+		model(nullptr),
+		world(XMMatrixIdentity())
+	{}
+};
 
 struct LightDirectional
 {

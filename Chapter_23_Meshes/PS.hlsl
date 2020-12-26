@@ -296,11 +296,9 @@ float4 main(VertexOut pin) : SV_TARGET
 
 #if ENABLE_TEXTURE
 	TextureColor = gAlbedoTexture.Sample(gLinearSamplerState, pin.TexCoord);
-
-	// if alpha clipping
-	{
-		clip(TextureColor.a - 0.1f);
-	}
+#if ENABLE_ALPHA_CLIPPING
+	clip(TextureColor.a - 0.1f);
+#endif // ENABLE_ALPHA_CLIPPING
 #endif // ENABLE_TEXTURE
 
 #if ENABLE_NORMAL_MAPPING

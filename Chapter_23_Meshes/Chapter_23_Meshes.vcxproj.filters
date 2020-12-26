@@ -73,5 +73,8 @@
     <FxCompile Include="VS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
+    <FxCompile Include="ShadowMapPS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

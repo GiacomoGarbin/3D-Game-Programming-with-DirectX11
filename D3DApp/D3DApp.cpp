@@ -557,33 +557,6 @@ float D3DApp::AspectRatio() const
 	return static_cast<float>(mMainWindowWidth) / static_cast<float>(mMainWindowHeight);
 }
 
-//void D3DApp::CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view)
-//{
-//	//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
-//	std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
-//	std::wstring path = base + name;
-//
-//	//if (const char* env_p = std::getenv_s("PATH"))
-//	//	std::cout << "Your PATH is: " << env_p << '\n';
-//
-//	ID3D11Resource* resource = nullptr;
-//
-//	HR(CreateDDSTextureFromFile(mDevice, path.c_str(), &resource, view));
-//
-//	// check created texture
-//	{
-//		ID3D11Texture2D* texture = nullptr;
-//		HR(resource->QueryInterface(IID_ID3D11Texture2D, (void**)&texture));
-//
-//		D3D11_TEXTURE2D_DESC desc;
-//		texture->GetDesc(&desc);
-//
-//		SafeRelease(texture);
-//	}
-//
-//	SafeRelease(resource);
-//};
-
 void GeometryGenerator::CreateBox(float width, float height, float depth, Mesh& mesh)
 {
 	mesh.mVertices.clear();
@@ -2964,4 +2937,187 @@ ID3D11ShaderResourceView* TextureManager::CreateSRV(const std::wstring& filename
 
 		return srv;
 	}
+}
+
+MeshGeometry::MeshGeometry() :
+	mVertexBuffer(nullptr),
+	mIndexBuffer(nullptr)
+{}
+
+MeshGeometry::~MeshGeometry()
+{
+	SafeRelease(mVertexBuffer);
+	SafeRelease(mIndexBuffer);
+}
+
+void MeshGeometry::SetVertexBuffer(ID3D11Device* device, const GeometryGenerator::Vertex* vertices, UINT count) {}
+void MeshGeometry::SetIndexBuffer(ID3D11Device* device, const UINT* indices, UINT count) {}
+void MeshGeometry::SetSubsetTable(const std::vector<Subset>& subsets) {}
+void MeshGeometry::draw(ID3D11DeviceContext* context, UINT SubsetID) {}
+
+bool Model3DLoader::load(const std::string& filename,
+						 std::vector<GeometryGenerator::Vertex>& vertices,
+						 std::vector<UINT>& indices,
+						 std::vector<Subset>& subsets,
+						 std::vector<Model3DMaterial>& materials)
+{
+	std::string base = "C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/";
+	std::ifstream ifs(base + filename);
+
+	UINT nMaterials = 0;
+	UINT nVertices = 0;
+	UINT nTriangles = 0;
+	UINT nBones = 0;
+	UINT nAnimationClips = 0;
+
+	std::string ignore;
+
+	if (ifs)
+	{
+		ifs >> ignore; // ignore header
+		ifs >> ignore >> nMaterials;
+		ifs >> ignore >> nVertices;
+		ifs >> ignore >> nTriangles;
+		ifs >> ignore >> nBones;
+		ifs >> ignore >> nAnimationClips;
+
+		LoadMaterials(ifs, nMaterials, materials);
+		LoadSubsets(ifs, nMaterials, subsets);
+		LoadVertices(ifs, nVertices, vertices);
+		LoadTriangles(ifs, nTriangles, indices);
+
+		return true;
+	}
+
+	return false;
+}
+
+bool Model3DLoader::load(const std::string& filename, TextureManager& manager, GameObject& obj)
+{
+	std::vector<Model3DMaterial> materials;
+
+	if (load(filename, obj.mMesh.mVertices, obj.mMesh.mIndices, obj.mSubsets, materials))
+	{
+		for (const Model3DMaterial& material : materials)
+		{
+			obj.mMaterials.push_back(material.material);
+
+			ID3D11ShaderResourceView* DiffuseMapSRV = manager.CreateSRV(material.DiffuseMapFileName);
+			obj.mDiffuseMapSRVs.push_back(DiffuseMapSRV);
+
+			ID3D11ShaderResourceView* NormalMapSRV = manager.CreateSRV(material.NormalMapFileName);
+			obj.mNormalMapSRVs.push_back(NormalMapSRV);
+		}
+
+		return true;
+	}
+	return false;
+}
+
+void Model3DLoader::LoadVertices(std::ifstream& ifs, UINT count, std::vector<GeometryGenerator::Vertex>& vertices)
+{
+	vertices.clear();
+	vertices.resize(count);
+
+	std::string ignore;
+	ifs >> ignore; // ignore header
+
+	for (UINT i = 0; i < count; ++i)
+	{
+		ifs >> ignore >> vertices[i].mPosition.x >> vertices[i].mPosition.y >> vertices[i].mPosition.z;
+		ifs >> ignore >> vertices[i].mTangent.x >> vertices[i].mTangent.y >> vertices[i].mTangent.z >> ignore; // vertices[i].mTangent.w;
+		ifs >> ignore >> vertices[i].mNormal.x >> vertices[i].mNormal.y >> vertices[i].mNormal.z;
+		ifs >> ignore >> vertices[i].mTexCoord.x >> vertices[i].mTexCoord.y;
+	}
+}
+
+void Model3DLoader::LoadTriangles(std::ifstream& ifs, UINT count, std::vector<UINT>& indices)
+{
+	indices.clear();
+	indices.resize(count * 3);
+
+	std::string ignore;
+	ifs >> ignore; // ignore header
+
+	for (UINT i = 0; i < count; ++i)
+	{
+		ifs >> indices[i * 3 + 0];
+		ifs >> indices[i * 3 + 1];
+		ifs >> indices[i * 3 + 2];
+	}
+}
+
+void Model3DLoader::LoadSubsets(std::ifstream& ifs, UINT count, std::vector<Subset>& subsets)
+{
+	subsets.clear();
+	subsets.resize(count);
+
+	std::string ignore;
+	ifs >> ignore; // ignore header
+
+	for (UINT i = 0; i < count; ++i)
+	{
+		ifs >> ignore >> subsets[i].id;
+		ifs >> ignore >> subsets[i].VertexStart;
+		ifs >> ignore >> subsets[i].VertexCount;
+		ifs >> ignore >> subsets[i].FaceStart;
+		ifs >> ignore >> subsets[i].FaceCount;
+	}
+}
+
+void Model3DLoader::LoadMaterials(std::ifstream& ifs, UINT count, std::vector<Model3DMaterial>& materials)
+{
+	materials.clear();
+	materials.resize(count);
+
+	std::string DiffuseMapFileName;
+	std::string NormalMapFileName;
+
+	std::string ignore;
+	ifs >> ignore; // ignore header
+
+	for (UINT i = 0; i < count; ++i)
+	{
+		Material& material = materials[i].material;
+
+		ifs >> ignore >> material.mAmbient.x  >> material.mAmbient.y  >> material.mAmbient.z;
+		ifs >> ignore >> material.mDiffuse.x  >> material.mDiffuse.y  >> material.mDiffuse.z;
+		ifs >> ignore >> material.mSpecular.x >> material.mSpecular.y >> material.mSpecular.z;
+		ifs >> ignore >> material.mSpecular.w; // specular factor
+		ifs >> ignore >> material.mReflect.x >> material.mReflect.y >> material.mReflect.z;
+		ifs >> ignore >> materials[i].AlphaClip;
+		ifs >> ignore >> materials[i].EffectName;
+		ifs >> ignore >> DiffuseMapFileName;
+		ifs >> ignore >> NormalMapFileName;
+
+		materials[i].DiffuseMapFileName.resize(DiffuseMapFileName.size(), ' ');
+		std::copy(DiffuseMapFileName.begin(), DiffuseMapFileName.end(), materials[i].DiffuseMapFileName.begin());
+
+		materials[i].NormalMapFileName.resize(NormalMapFileName.size(), ' ');
+		std::copy(NormalMapFileName.begin(), NormalMapFileName.end(), materials[i].NormalMapFileName.begin());
+	}
+}
+
+BasicModel::BasicModel(ID3D11Device* device, TextureManager& manager, const std::string& filename)
+{
+	Model3DLoader loader;
+	loader.load(filename, mVertices, mIndices, mSubsets, mMaterials);
+
+	mMesh.SetVertexBuffer(device, mVertices.data(), mVertices.size());
+	mMesh.SetIndexBuffer(device, mIndices.data(), mIndices.size());
+	mMesh.SetSubsetTable(mSubsets);
+
+	for (Model3DMaterial& material : mMaterials)
+	{
+		ID3D11ShaderResourceView* DiffuseMapSRV = manager.CreateSRV(material.DiffuseMapFileName);
+		mDiffuseMapSRVs.push_back(DiffuseMapSRV);
+
+		ID3D11ShaderResourceView* NormalMapSRV = manager.CreateSRV(material.NormalMapFileName);
+		mNormalMapSRVs.push_back(NormalMapSRV);
+	}
+}
+
+void GameObject::LoadModel(ID3D11Device* device, TextureManager& manager, const std::string& filename)
+{
+	Model3DLoader().load(filename, manager, *this);
 }
