@@ -583,6 +583,7 @@ class ShadowMap
 
 	ID3D11VertexShader* mVertexShader;
 	ID3D11InputLayout* mInputLayout;
+	ID3D11PixelShader* mPixelShader;
 
 	ID3D11RasterizerState* mRasterizerState;
 	
@@ -610,6 +611,7 @@ public:
 
 	ID3D11VertexShader* GetVS();
 	ID3D11InputLayout* GetIL();
+	ID3D11PixelShader* GetPS();
 	ID3D11RasterizerState* GetRS();
 	ID3D11SamplerState*& GetSS(); // return reference to pointer
 	ID3D11ShaderResourceView*& GetSRV();

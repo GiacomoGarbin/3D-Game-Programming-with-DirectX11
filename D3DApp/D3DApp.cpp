@@ -1906,6 +1906,9 @@ ShadowMap::ShadowMap() :
 	mDSV(nullptr),
 	mSRV(nullptr),
 	mPerObjectCB(nullptr),
+	mVertexShader(nullptr),
+	mInputLayout(nullptr),
+	mPixelShader(nullptr),
 	mRasterizerState(nullptr),
 	mSamplerState(nullptr)
 {}
@@ -1917,6 +1920,7 @@ ShadowMap::~ShadowMap()
 	SafeRelease(mPerObjectCB);
 	SafeRelease(mVertexShader);
 	SafeRelease(mInputLayout);
+	SafeRelease(mPixelShader);
 	SafeRelease(mRasterizerState);
 	SafeRelease(mSamplerState);
 }
@@ -2005,6 +2009,20 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 
 			HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mInputLayout));
 		}
+	}
+
+	// PS
+	{
+		std::wstring path = L"ShadowMapPS.hlsl";
+
+		std::vector<D3D_SHADER_MACRO> defines;
+		defines.push_back({ "ENABLE_TEXTURE",         "1" });
+		defines.push_back({ "ENABLE_ALPHA_CLIPPING",  "1" });
+		defines.push_back({ nullptr, nullptr });
+
+		ID3DBlob* pCode;
+		HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+		HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mPixelShader));
 	}
 
 	// rasterizer state
@@ -2101,6 +2119,11 @@ ID3D11VertexShader* ShadowMap::GetVS()
 ID3D11InputLayout* ShadowMap::GetIL()
 {
 	return mInputLayout;
+}
+
+ID3D11PixelShader* ShadowMap::GetPS()
+{
+	return mPixelShader;
 }
 
 ID3D11RasterizerState* ShadowMap::GetRS()
