@@ -1879,9 +1879,9 @@ ShadowMap::ShadowMap() :
 	mDSV(nullptr),
 	mSRV(nullptr),
 	mPerObjectCB(nullptr),
-	mVertexShader(nullptr),
-	mInputLayout(nullptr),
-	mPixelShader(nullptr),
+	mVertexShader{ nullptr, nullptr },
+	mInputLayout{ nullptr, nullptr },
+	mPixelShader{ nullptr, nullptr },
 	mRasterizerState(nullptr),
 	mSamplerState(nullptr)
 {}
@@ -1891,9 +1891,14 @@ ShadowMap::~ShadowMap()
 	SafeRelease(mDSV);
 	SafeRelease(mSRV);
 	SafeRelease(mPerObjectCB);
-	SafeRelease(mVertexShader);
-	SafeRelease(mInputLayout);
-	SafeRelease(mPixelShader);
+
+	for (UINT i = 0; i < 2; ++i)
+	{
+		SafeRelease(mVertexShader[i]);
+		SafeRelease(mInputLayout[i]);
+		SafeRelease(mPixelShader[i]);
+	}
+	
 	SafeRelease(mRasterizerState);
 	SafeRelease(mSamplerState);
 }
@@ -1949,9 +1954,8 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 
 	SafeRelease(texture);
 
-	// build shadow map constant buffer
+	// per object constant buffer
 	{
-		static_assert((sizeof(PerObjectCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
 
 		D3D11_BUFFER_DESC desc;
 		desc.ByteWidth = sizeof(PerObjectCB);
@@ -1964,15 +1968,17 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 		HR(device->CreateBuffer(&desc, nullptr, &mPerObjectCB));
 	}
 
-	// VS
+	// vertex shaders
+	for (UINT i = 0; i < 2; ++i)
 	{
-		std::wstring path = L"ShadowMapVS.hlsl";
+		std::wstring path = i == 0 ? L"ShadowMapVS.hlsl" : L"ShadowMapSkinnedVS.hlsl";
 
 		ID3DBlob* pCode;
 		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
-		HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mVertexShader));
+		HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mVertexShader[i]));
 
 		// input layout
+		if (i == 0)
 		{
 			std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
 			{
@@ -1980,22 +1986,37 @@ void ShadowMap::Init(ID3D11Device* device, UINT width, UINT height)
 				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
 			};
 
-			HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mInputLayout));
+			HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mInputLayout[i]));
+		}
+		else
+		{
+			std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+			{
+				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"WEIGHTS",     0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT,   0, 56, D3D11_INPUT_PER_VERTEX_DATA, 0}
+			};
+
+			HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mInputLayout[i]));
 		}
 	}
 
 	// PS
+	for (UINT i = 0; i < 2; ++i)
 	{
 		std::wstring path = L"ShadowMapPS.hlsl";
 
+		std::string str = std::to_string(i);
+
 		std::vector<D3D_SHADER_MACRO> defines;
 		defines.push_back({ "ENABLE_TEXTURE",         "1" });
-		defines.push_back({ "ENABLE_ALPHA_CLIPPING",  "1" });
+		defines.push_back({ "ENABLE_ALPHA_CLIPPING",  str.c_str() });
 		defines.push_back({ nullptr, nullptr });
 
 		ID3DBlob* pCode;
 		HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-		HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mPixelShader));
+		HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mPixelShader[i]));
 	}
 
 	// rasterizer state
@@ -2084,19 +2105,19 @@ void ShadowMap::BuildTranform(const XMFLOAT3& light, const BoundingSphere& bound
 	XMStoreFloat4x4(&mShadowTransform, S);
 }
 
-ID3D11VertexShader* ShadowMap::GetVS()
+ID3D11VertexShader* ShadowMap::GetVS(bool IsSkinned)
 {
-	return mVertexShader;
+	return mVertexShader[IsSkinned ? 1 : 0];
 }
 
-ID3D11InputLayout* ShadowMap::GetIL()
+ID3D11InputLayout* ShadowMap::GetIL(bool IsSkinned)
 {
-	return mInputLayout;
+	return mInputLayout[IsSkinned ? 1 : 0];
 }
 
-ID3D11PixelShader* ShadowMap::GetPS()
+ID3D11PixelShader* ShadowMap::GetPS(bool IsAlphaClipping)
 {
-	return mPixelShader;
+	return mPixelShader[IsAlphaClipping ? 1 : 0];
 }
 
 ID3D11RasterizerState* ShadowMap::GetRS()
@@ -2118,9 +2139,9 @@ ID3D11Buffer*& ShadowMap::GetCB()
 SSAO::SSAO() :
 	mNormalDepthRTV(nullptr),
 	mNormalDepthSRV(nullptr),
-	mNormalDepthVS(nullptr),
-	mNormalDepthIL(nullptr),
-	mNormalDepthPS(nullptr),
+	mNormalDepthVS{ nullptr, nullptr },
+	mNormalDepthIL{ nullptr, nullptr },
+	mNormalDepthPS{ nullptr, nullptr },
 	mNormalDepthSS(nullptr),
 	mRandomVectorSRV(nullptr),
 	mRandomVectorSS(nullptr),
@@ -2138,9 +2159,12 @@ SSAO::~SSAO()
 {
 	SafeRelease(mNormalDepthRTV);
 	SafeRelease(mNormalDepthSRV);
-	SafeRelease(mNormalDepthVS);
-	SafeRelease(mNormalDepthIL);
-	SafeRelease(mNormalDepthPS);
+	for (UINT i = 0; i < 2; ++i)
+	{
+		SafeRelease(mNormalDepthVS[i]);
+		SafeRelease(mNormalDepthIL[i]);
+		SafeRelease(mNormalDepthPS[i]);
+	}
 	SafeRelease(mNormalDepthCB);
 	SafeRelease(mNormalDepthSS);
 	SafeRelease(mRandomVectorSRV);
@@ -2165,14 +2189,16 @@ void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfView
 	// normal depth
 	{
 		// VS
+		for (UINT i = 0; i < 2; ++i)
 		{
-			std::wstring path = L"SSAONormalDepthVS.hlsl";
+			std::wstring path = i == 0 ? L"SSAONormalDepthVS.hlsl" : L"SSAONormalDepthSkinnedVS.hlsl";
 
 			ID3DBlob* pCode;
 			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
-			HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mNormalDepthVS));
+			HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mNormalDepthVS[i]));
 
 			// input layout
+			if (i == 0)
 			{
 				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
 				{
@@ -2181,24 +2207,38 @@ void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfView
 					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				};
 
-				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mNormalDepthIL));
+				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mNormalDepthIL[i]));
+			}
+			else
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"WEIGHTS",     0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT,   0, 56, D3D11_INPUT_PER_VERTEX_DATA, 0}
+				};
+
+				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mNormalDepthIL[i]));
 			}
 		}
 
 		// PS
+		for (UINT i = 0; i < 2; ++i)
 		{
 			std::wstring path = L"SSAONormalDepthPS.hlsl";
 
+			std::string str = std::to_string(i);
+
 			std::vector<D3D_SHADER_MACRO> defines;
-			// spheres and skull don't have an albedo texture
-			defines.push_back({ "ENABLE_TEXTURE",        "1" });
-			defines.push_back({ "ENABLE_ALPHA_CLIPPING", "1" });
-			// TODO : enable normap mapping ?
+			defines.push_back({ "ENABLE_TEXTURE",         "1" });
+			defines.push_back({ "ENABLE_ALPHA_CLIPPING",  str.c_str() });
 			defines.push_back({ nullptr, nullptr });
 
 			ID3DBlob* pCode;
 			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-			HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mNormalDepthPS));
+			HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mNormalDepthPS[i]));
 		}
 
 		// constant buffer
@@ -2404,15 +2444,8 @@ void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfView
 		{
 			std::wstring path = L"SSAOAmbientMapComputePS.hlsl";
 
-			std::vector<D3D_SHADER_MACRO> defines;
-			// spheres and skull don't have an albedo texture
-			defines.push_back({ "ENABLE_TEXTURE",        "0" });
-			defines.push_back({ "ENABLE_ALPHA_CLIPPING", "0" });
-			// TODO : enable normap mapping ?
-			defines.push_back({ nullptr, nullptr });
-
 			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
 			HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mAmbientMapQuad.mPixelShader));
 		}
 
@@ -2592,19 +2625,19 @@ ID3D11Buffer*& SSAO::GetNormalDepthCB()
 	return mNormalDepthCB;
 }
 
-ID3D11VertexShader* SSAO::GetNormalDepthVS()
+ID3D11VertexShader* SSAO::GetNormalDepthVS(bool IsSkinned)
 {
-	return mNormalDepthVS;
+	return mNormalDepthVS[IsSkinned ? 1 : 0];
 }
 
-ID3D11InputLayout* SSAO::GetNormalDepthIL()
+ID3D11InputLayout* SSAO::GetNormalDepthIL(bool IsSkinned)
 {
-	return mNormalDepthIL;
+	return mNormalDepthIL[IsSkinned ? 1 : 0];
 }
 
-ID3D11PixelShader* SSAO::GetNormalDepthPS()
+ID3D11PixelShader* SSAO::GetNormalDepthPS(bool IsAlphaClipping)
 {
-	return mNormalDepthPS;
+	return mNormalDepthPS[IsAlphaClipping ? 1 : 0];
 }
 
 void SSAO::BindNormalDepthRenderTarget(ID3D11DeviceContext* context, ID3D11DepthStencilView* dsv)
@@ -2797,6 +2830,11 @@ void SSAO::BlurAmbientMap(ID3D11DeviceContext* context, ID3D11RenderTargetView* 
 	context->OMSetRenderTargets(0, nullptr, nullptr);
 }
 
+ID3D11ShaderResourceView*& SSAO::GetNormalDepthSRV()
+{
+	return mNormalDepthSRV;
+}
+
 ID3D11ShaderResourceView*& SSAO::GetAmbientMapSRV()
 {
 	return mAmbientMapSRV[0];
@@ -2819,17 +2857,17 @@ AnimationObject::KeyFrame::~KeyFrame()
 {}
 
 
-float AnimationObject::GetTimeStart()
+float AnimationObject::GetTimeStart() const
 {
 	return keyframes.front().time;
 }
 
-float AnimationObject::GetTimeEnd()
+float AnimationObject::GetTimeEnd() const
 {
 	return keyframes.back().time;
 }
 
-void AnimationObject::interpolate(float t, XMMATRIX& world)
+void AnimationObject::interpolate(float t, XMMATRIX& world) const
 {
 	// rotation origin
 	XMVECTOR O = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
@@ -2854,8 +2892,8 @@ void AnimationObject::interpolate(float t, XMMATRIX& world)
 	{
 		for (UINT i = 0; i < keyframes.size() - 1; ++i)
 		{
-			KeyFrame& a = keyframes[i + 0];
-			KeyFrame& b = keyframes[i + 1];
+			const KeyFrame& a = keyframes[i + 0];
+			const KeyFrame& b = keyframes[i + 1];
 
 			if (a.time <= t && t <= b.time)
 			{
@@ -2878,6 +2916,41 @@ void AnimationObject::interpolate(float t, XMMATRIX& world)
 				break;
 			}
 		}
+	}
+}
+
+float AnimationClip::GetTimeClipStart() const
+{
+	float t = FLT_MAX;
+
+	for (const AnimationObject& animation : mAnimationObjects)
+	{
+		t = std::min(t, animation.GetTimeStart());
+	}
+
+	return t;
+}
+
+float AnimationClip::GetTimeClipEnd() const
+{
+	float t = 0;
+
+	for (const AnimationObject& animation : mAnimationObjects)
+	{
+		t = std::max(t, animation.GetTimeEnd());
+	}
+
+	return t;
+}
+
+void AnimationClip::interpolate(float t, std::vector<XMMATRIX>& transforms) const
+{
+	transforms.clear();
+	transforms.resize(mAnimationObjects.size());
+
+	for (UINT i = 0; i < mAnimationObjects.size(); ++i)
+	{
+		mAnimationObjects[i].interpolate(t, transforms[i]);
 	}
 }
 
@@ -2959,7 +3032,8 @@ bool Model3DLoader::load(const std::string& filename,
 						 std::vector<GeometryGenerator::Vertex>& vertices,
 						 std::vector<UINT>& indices,
 						 std::vector<Subset>& subsets,
-						 std::vector<Model3DMaterial>& materials)
+						 std::vector<Model3DMaterial>& materials,
+						 SkinnedObject* SkinnedData)
 {
 	std::string base = "C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/";
 	std::ifstream ifs(base + filename);
@@ -2983,8 +3057,15 @@ bool Model3DLoader::load(const std::string& filename,
 
 		LoadMaterials(ifs, nMaterials, materials);
 		LoadSubsets(ifs, nMaterials, subsets);
-		LoadVertices(ifs, nVertices, vertices);
+		LoadVertices(ifs, nVertices, vertices, SkinnedData ? true : false);
 		LoadTriangles(ifs, nTriangles, indices);
+
+		if (SkinnedData)
+		{
+			LoadBoneOffsets(ifs, nBones, SkinnedData->mBoneOffsets);
+			LoadBoneHierarchy(ifs, nBones, SkinnedData->mBoneHierarchy);
+			LoadAnimationClips(ifs, nBones, nAnimationClips, SkinnedData->mAnimationClips);
+		}
 
 		return true;
 	}
@@ -2992,11 +3073,13 @@ bool Model3DLoader::load(const std::string& filename,
 	return false;
 }
 
-bool Model3DLoader::load(const std::string& filename, TextureManager& manager, GameObject& obj)
+bool Model3DLoader::load(const std::string& filename,
+						 TextureManager& manager,
+						 GameObject& obj)
 {
 	std::vector<Model3DMaterial> materials;
 
-	if (load(filename, obj.mMesh.mVertices, obj.mMesh.mIndices, obj.mSubsets, materials))
+	if (load(filename, obj.mMesh.mVertices, obj.mMesh.mIndices, obj.mSubsets, materials, obj.mIsSkinned ? &obj.mSkinnedData : nullptr))
 	{
 		for (const Model3DMaterial& material : materials)
 		{
@@ -3007,14 +3090,18 @@ bool Model3DLoader::load(const std::string& filename, TextureManager& manager, G
 
 			ID3D11ShaderResourceView* NormalMapSRV = manager.CreateSRV(material.NormalMapFileName);
 			obj.mNormalMapSRVs.push_back(NormalMapSRV);
-		}
 
+			obj.mIsAlphaClipping.push_back(material.IsAlphaClipping);
+		}
 		return true;
 	}
 	return false;
 }
 
-void Model3DLoader::LoadVertices(std::ifstream& ifs, UINT count, std::vector<GeometryGenerator::Vertex>& vertices)
+void Model3DLoader::LoadVertices(std::ifstream& ifs,
+								 UINT count,
+								 std::vector<GeometryGenerator::Vertex>& vertices,
+								 bool skinned)
 {
 	vertices.clear();
 	vertices.resize(count);
@@ -3028,6 +3115,22 @@ void Model3DLoader::LoadVertices(std::ifstream& ifs, UINT count, std::vector<Geo
 		ifs >> ignore >> vertices[i].mTangent.x >> vertices[i].mTangent.y >> vertices[i].mTangent.z >> ignore; // vertices[i].mTangent.w;
 		ifs >> ignore >> vertices[i].mNormal.x >> vertices[i].mNormal.y >> vertices[i].mNormal.z;
 		ifs >> ignore >> vertices[i].mTexCoord.x >> vertices[i].mTexCoord.y;
+
+		if (skinned)
+		{
+			float weights[4];
+			ifs >> ignore >> weights[0] >> weights[1] >> weights[2] >> weights[3];
+			vertices[i].mWeights.x = weights[0];
+			vertices[i].mWeights.y = weights[1];
+			vertices[i].mWeights.z = weights[2];
+
+			UINT BoneIndices[4];
+			ifs >> ignore >> BoneIndices[0] >> BoneIndices[1] >> BoneIndices[2] >> BoneIndices[3];
+			vertices[i].mBoneIndices[0] = (BYTE)BoneIndices[0];
+			vertices[i].mBoneIndices[1] = (BYTE)BoneIndices[1];
+			vertices[i].mBoneIndices[2] = (BYTE)BoneIndices[2];
+			vertices[i].mBoneIndices[3] = (BYTE)BoneIndices[3];
+		}
 	}
 }
 
@@ -3085,7 +3188,7 @@ void Model3DLoader::LoadMaterials(std::ifstream& ifs, UINT count, std::vector<Mo
 		ifs >> ignore >> material.mSpecular.x >> material.mSpecular.y >> material.mSpecular.z;
 		ifs >> ignore >> material.mSpecular.w; // specular factor
 		ifs >> ignore >> material.mReflect.x >> material.mReflect.y >> material.mReflect.z;
-		ifs >> ignore >> materials[i].AlphaClip;
+		ifs >> ignore >> materials[i].IsAlphaClipping;
 		ifs >> ignore >> materials[i].EffectName;
 		ifs >> ignore >> DiffuseMapFileName;
 		ifs >> ignore >> NormalMapFileName;
@@ -3096,6 +3199,96 @@ void Model3DLoader::LoadMaterials(std::ifstream& ifs, UINT count, std::vector<Mo
 		materials[i].NormalMapFileName.resize(NormalMapFileName.size(), ' ');
 		std::copy(NormalMapFileName.begin(), NormalMapFileName.end(), materials[i].NormalMapFileName.begin());
 	}
+}
+
+void Model3DLoader::LoadBoneOffsets(std::ifstream& ifs, UINT count, std::vector<XMFLOAT4X4>& BoneOffsets)
+{
+	BoneOffsets.clear();
+	BoneOffsets.resize(count);
+
+	std::string ignore;
+	ifs >> ignore; // ignore header
+
+	for (UINT i = 0; i < count; ++i)
+	{
+		ifs >> ignore >>
+			BoneOffsets[i](0, 0) >> BoneOffsets[i](0, 1) >> BoneOffsets[i](0, 2) >> BoneOffsets[i](0, 3) >>
+			BoneOffsets[i](1, 0) >> BoneOffsets[i](1, 1) >> BoneOffsets[i](1, 2) >> BoneOffsets[i](1, 3) >>
+			BoneOffsets[i](2, 0) >> BoneOffsets[i](2, 1) >> BoneOffsets[i](2, 2) >> BoneOffsets[i](2, 3) >>
+			BoneOffsets[i](3, 0) >> BoneOffsets[i](3, 1) >> BoneOffsets[i](3, 2) >> BoneOffsets[i](3, 3);
+	}
+}
+
+void Model3DLoader::LoadBoneHierarchy(std::ifstream& ifs, UINT count, std::vector<UINT>& BoneHierarchy)
+{
+	BoneHierarchy.clear();
+	BoneHierarchy.resize(count);
+
+	std::string ignore;
+	ifs >> ignore; // ignore header
+
+	for (UINT i = 0; i < count; ++i)
+	{
+		ifs >> ignore >> BoneHierarchy[i];
+	}
+}
+
+void Model3DLoader::LoadAnimationClips(std::ifstream& ifs,
+									   UINT BoneCount,
+									   UINT AnimationClipCount,
+									   std::map<std::string, AnimationClip>& animations)
+{
+	std::string ignore;
+	ifs >> ignore; // ignore header
+
+	for (UINT ClipIndex = 0; ClipIndex < AnimationClipCount; ++ClipIndex)
+	{
+		std::string ClipName;
+		ifs >> ignore >> ClipName;
+		ifs >> ignore; // {
+
+		AnimationClip clip;
+		clip.mAnimationObjects.resize(BoneCount);
+
+		for (UINT BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+		{
+			LoadAnimation(ifs, BoneCount, clip.mAnimationObjects[BoneIndex]);
+		}
+		ifs >> ignore; // }
+
+		animations[ClipName] = clip;
+	}
+}
+
+void Model3DLoader::LoadAnimation(std::ifstream& ifs, UINT BoneCount, AnimationObject& animation)
+{
+	UINT keyframes = 0;
+
+	std::string ignore;
+	ifs >> ignore >> ignore >> keyframes;
+	ifs >> ignore; // {
+
+	animation.keyframes.resize(keyframes);
+
+	for (UINT i = 0; i < keyframes; ++i)
+	{
+		float t = 0.0f;
+		XMFLOAT3 T(0.0f, 0.0f, 0.0f);
+		XMFLOAT3 S(1.0f, 1.0f, 1.0f);
+		XMFLOAT4 R(0.0f, 0.0f, 0.0f, 1.0f);
+
+		ifs >> ignore >> t;
+		ifs >> ignore >> T.x >> T.y >> T.z;
+		ifs >> ignore >> S.x >> S.y >> S.z;
+		ifs >> ignore >> R.x >> R.y >> R.z >> R.w;
+
+		animation.keyframes[i].time = t;
+		animation.keyframes[i].translation = T;
+		animation.keyframes[i].scale = S;
+		animation.keyframes[i].rotation = R;
+	}
+
+	ifs >> ignore; // }
 }
 
 BasicModel::BasicModel(ID3D11Device* device, TextureManager& manager, const std::string& filename)
@@ -3117,7 +3310,70 @@ BasicModel::BasicModel(ID3D11Device* device, TextureManager& manager, const std:
 	}
 }
 
-void GameObject::LoadModel(ID3D11Device* device, TextureManager& manager, const std::string& filename)
+float SkinnedObject::GetTimeClipStart(const std::string& ClipName)
 {
+	return mAnimationClips.at(ClipName).GetTimeClipStart();
+}
+
+float SkinnedObject::GetTimeClipEnd(const std::string& ClipName)
+{
+	return mAnimationClips.at(ClipName).GetTimeClipEnd();
+}
+
+void SkinnedObject::GetTransforms(const std::string& animation,
+								  float t,
+								  std::vector<XMFLOAT4X4>& transforms)
+{
+	UINT BoneCount = mBoneOffsets.size();
+
+	std::vector<XMMATRIX> ToParentTransforms(BoneCount);
+	std::vector<XMMATRIX> ToRootTransforms(BoneCount);
+
+	// interpolate all the bones of this clip at t
+	mAnimationClips.at(animation).interpolate(t, ToParentTransforms);
+
+	// traverse the hierarchy and ...
+
+	// the root bone has index 0 and has no parent,
+	// so its ToRootTransform is just its local bone transform
+	ToRootTransforms[0] = ToParentTransforms[0];
+
+	// find the ToRootTransform of the children
+	for (UINT i = 1; i < BoneCount; ++i)
+	{
+		XMMATRIX ToParent = ToParentTransforms[i];
+
+		// parent's ToRoot
+		UINT ParentIndex = mBoneHierarchy[i];
+		XMMATRIX ToRoot = ToRootTransforms[ParentIndex];
+
+		ToRootTransforms[i] = ToParent * ToRoot;
+	}
+
+	// ... and transform all the bones to the root space
+	for (UINT i = 0; i < BoneCount; ++i)
+	{
+		// premultiply by the bone offset transform to get the final transform.
+		XMMATRIX offset = XMLoadFloat4x4(&mBoneOffsets[i]);
+		XMMATRIX ToRoot = ToRootTransforms[i];
+		XMStoreFloat4x4(&transforms[i], offset * ToRoot);
+	}
+
+}
+
+void GameObject::LoadModel(ID3D11Device* device, TextureManager& manager, const std::string& filename, bool skinned)
+{
+	mIsSkinned = skinned;
 	Model3DLoader().load(filename, manager, *this);
+}
+
+void GameObjectInstance::update(float dt)
+{
+	time += dt;
+	obj->mSkinnedData.GetTransforms(ClipName, time, transforms);
+
+	if (time > obj->mSkinnedData.GetTimeClipEnd(ClipName))
+	{
+		time = 0; // loop animation
+	}
 }

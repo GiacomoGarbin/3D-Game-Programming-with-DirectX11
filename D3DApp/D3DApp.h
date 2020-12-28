@@ -151,8 +151,6 @@ public:
 
 	float AspectRatio() const;
 
-	//void CreateSRV(const std::wstring& name, ID3D11ShaderResourceView** view);
-
 	TextureManager mTextureManager;
 
 protected:
@@ -206,8 +204,9 @@ public:
 		XMFLOAT3 mPosition;
 		XMFLOAT3 mNormal;
 		XMFLOAT3 mTangent;
-		//XMFLOAT4 mColor;
 		XMFLOAT2 mTexCoord;
+		XMFLOAT3 mWeights;
+		BYTE	 mBoneIndices[4];
 
 		Vertex() {}
 
@@ -219,17 +218,10 @@ public:
 			mNormal(Nx, Ny, Nz),
 			mTangent(Tx, Ty, Tz),
 			mTexCoord(Tu, Tv)
-		{}
-
-		//Vertex(float Px, float Py, float Pz,
-		//	   float Nx, float Ny, float Nz,
-		//	   float Cr, float Cg, float Cb, // float Cr, float Cg, float Cb, float Ca,
-		//	   float Tu, float Tv) :
-		//	mPosition(Px, Py, Pz),
-		//	mNormal(Nx, Ny, Nz),
-		//	mColor(Cr, Cb, Cg, 1), // mColor(Cr, Cb, Cg, Ca),
-		//	mTexCoord(Tu, Tv)
-		//{}
+		{
+			ZeroMemory(&mWeights, sizeof(mWeights));
+			ZeroMemory(&mBoneIndices, sizeof(mBoneIndices));
+		}
 	};
 
 	struct Mesh
@@ -337,9 +329,44 @@ public:
 		mCurrTime(0)
 	{}
 
-	float GetTimeStart();
-	float GetTimeEnd();
-	void interpolate(float t, XMMATRIX& world);
+	float GetTimeStart() const;
+	float GetTimeEnd() const;
+	void interpolate(float t, XMMATRIX& world) const;
+};
+
+class AnimationClip
+{
+public:
+	// an AnimationObject for every bone
+	std::vector<AnimationObject> mAnimationObjects;
+
+	float GetTimeClipStart() const;
+	float GetTimeClipEnd() const;
+	void interpolate(float t, std::vector<XMMATRIX>& transforms) const;
+};
+
+class SkinnedObject
+{
+public:
+	// parent index of ith bone
+	std::vector<UINT> mBoneHierarchy;
+	std::vector<XMFLOAT4X4> mBoneOffsets;
+	std::map<std::string, AnimationClip> mAnimationClips;
+
+	//SkinnedObject(std::vector<UINT>& hierarchy,
+	//			  std::vector<XMFLOAT4X4>& offsets,
+	//			  std::map<std::string, AnimationClip>& animations) :
+	//	mBoneHierarchy(hierarchy),
+	//	mBoneOffsets(offsets),
+	//	mAnimationClips(animations)
+	//{}
+
+	float GetTimeClipStart(const std::string& ClipName);
+	float GetTimeClipEnd(const std::string& ClipName);
+
+	void GetTransforms(const std::string& animation,
+					   float t,
+					   std::vector<XMFLOAT4X4>& transforms);
 };
 
 struct Subset
@@ -411,6 +438,10 @@ public:
 	std::vector<ID3D11ShaderResourceView*> mDiffuseMapSRVs;
 	std::vector<ID3D11ShaderResourceView*> mNormalMapSRVs;
 	std::vector<Subset> mSubsets;
+	std::vector<bool> mIsAlphaClipping;
+
+	bool mIsSkinned;
+	SkinnedObject mSkinnedData;
 
 	GameObject() :
 		mVertexBuffer(nullptr),
@@ -433,7 +464,8 @@ public:
 		mRasterizerState(nullptr),
 		mBlendState(nullptr),
 		mDepthStencilState(nullptr),
-		mStencilRef(0)
+		mStencilRef(0),
+		mIsSkinned(false)
 	{}
 
 	~GameObject()
@@ -454,7 +486,7 @@ public:
 		SafeRelease((*mDepthStencilState.GetAddressOf()));
 	}
 
-	void LoadModel(ID3D11Device* device, TextureManager& manager, const std::string& filename);
+	void LoadModel(ID3D11Device* device, TextureManager& manager, const std::string& filename, bool skinned = false);
 };
 
 struct GameObjectInstance
@@ -462,10 +494,17 @@ struct GameObjectInstance
 	GameObject* obj;
 	XMMATRIX world;
 
+	float time;
+	std::string ClipName;
+	std::vector<XMFLOAT4X4> transforms;
+
 	GameObjectInstance() :
 		obj(nullptr),
-		world(XMMatrixIdentity())
+		world(XMMatrixIdentity()),
+		time(0)
 	{}
+
+	void update(float dt);
 };
 
 class MeshGeometry
@@ -490,7 +529,7 @@ private:
 struct Model3DMaterial
 {
 	Material material;
-	bool AlphaClip;
+	bool IsAlphaClipping;
 	std::string EffectName;
 	std::wstring DiffuseMapFileName;
 	std::wstring NormalMapFileName;
@@ -503,15 +542,23 @@ public:
 			  std::vector<GeometryGenerator::Vertex>& vertices,
 			  std::vector<UINT>& indices,
 			  std::vector<Subset>& subsets,
-			  std::vector<Model3DMaterial>& materials);
+			  std::vector<Model3DMaterial>& materials,
+			  SkinnedObject* SkinnedData = nullptr);
 
-	bool load(const std::string& filename, TextureManager& manager, GameObject& obj);
+	bool load(const std::string& filename,
+			  TextureManager& manager,
+			  GameObject& obj);
 
 private:
-	void LoadVertices(std::ifstream& ifs, UINT count, std::vector<GeometryGenerator::Vertex>& vertices);
+	void LoadVertices(std::ifstream& ifs, UINT count, std::vector<GeometryGenerator::Vertex>& vertices, bool skinned = false);
 	void LoadTriangles(std::ifstream& ifs, UINT count, std::vector<UINT>& indices);
 	void LoadSubsets(std::ifstream& ifs, UINT count, std::vector<Subset>& subsets);
 	void LoadMaterials(std::ifstream& ifs, UINT count, std::vector<Model3DMaterial>& materials);
+	
+	void LoadBoneOffsets(std::ifstream& ifs, UINT count, std::vector<XMFLOAT4X4>& offsets);
+	void LoadBoneHierarchy(std::ifstream& ifs, UINT count, std::vector<UINT>& hierarchy);
+	void LoadAnimationClips(std::ifstream& ifs, UINT BoneCount, UINT ClipCount, std::map<std::string, AnimationClip>& animations);
+	void LoadAnimation(std::ifstream& ifs, UINT count, AnimationObject& animation);
 };
 
 class BasicModel
@@ -689,9 +736,9 @@ class ShadowMap
 
 	ID3D11Buffer* mPerObjectCB;
 
-	ID3D11VertexShader* mVertexShader;
-	ID3D11InputLayout* mInputLayout;
-	ID3D11PixelShader* mPixelShader;
+	ID3D11VertexShader* mVertexShader[2];
+	ID3D11InputLayout* mInputLayout[2];
+	ID3D11PixelShader* mPixelShader[2];
 
 	ID3D11RasterizerState* mRasterizerState;
 	
@@ -717,9 +764,11 @@ public:
 		XMFLOAT4X4 mTexTransform;
 	};
 
-	ID3D11VertexShader* GetVS();
-	ID3D11InputLayout* GetIL();
-	ID3D11PixelShader* GetPS();
+	static_assert((sizeof(PerObjectCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+	ID3D11VertexShader* GetVS(bool IsSkinned = false);
+	ID3D11InputLayout* GetIL(bool IsSkinned = false);
+	ID3D11PixelShader* GetPS(bool IsAlphaClipping = false);
 	ID3D11RasterizerState* GetRS();
 	ID3D11SamplerState*& GetSS(); // return reference to pointer
 	ID3D11ShaderResourceView*& GetSRV();
@@ -735,9 +784,9 @@ class SSAO
 
 	ID3D11RenderTargetView* mNormalDepthRTV;
 	ID3D11ShaderResourceView* mNormalDepthSRV;
-	ID3D11VertexShader* mNormalDepthVS;
-	ID3D11InputLayout* mNormalDepthIL;
-	ID3D11PixelShader* mNormalDepthPS;
+	ID3D11VertexShader* mNormalDepthVS[2];
+	ID3D11InputLayout* mNormalDepthIL[2];
+	ID3D11PixelShader* mNormalDepthPS[2];
 	ID3D11Buffer* mNormalDepthCB;
 	ID3D11SamplerState* mNormalDepthSS;
 
@@ -807,10 +856,11 @@ public:
 	static_assert((sizeof(AmbientMapComputeCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
 
 	ID3D11Buffer*& GetNormalDepthCB();
-	ID3D11VertexShader* GetNormalDepthVS();
-	ID3D11InputLayout* GetNormalDepthIL();
-	ID3D11PixelShader* GetNormalDepthPS();
+	ID3D11VertexShader* GetNormalDepthVS(bool IsSkinned = false);
+	ID3D11InputLayout* GetNormalDepthIL(bool IsSkinned = false);
+	ID3D11PixelShader* GetNormalDepthPS(bool IsAlphaClipping = false);
 
+	ID3D11ShaderResourceView*& GetNormalDepthSRV();
 	ID3D11ShaderResourceView*& GetAmbientMapSRV();
 	ID3D11RenderTargetView*& GetAmbientMapRTV();
 
