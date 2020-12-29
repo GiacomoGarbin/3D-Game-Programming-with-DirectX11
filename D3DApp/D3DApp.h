@@ -353,14 +353,6 @@ public:
 	std::vector<XMFLOAT4X4> mBoneOffsets;
 	std::map<std::string, AnimationClip> mAnimationClips;
 
-	//SkinnedObject(std::vector<UINT>& hierarchy,
-	//			  std::vector<XMFLOAT4X4>& offsets,
-	//			  std::map<std::string, AnimationClip>& animations) :
-	//	mBoneHierarchy(hierarchy),
-	//	mBoneOffsets(offsets),
-	//	mAnimationClips(animations)
-	//{}
-
 	float GetTimeClipStart(const std::string& ClipName);
 	float GetTimeClipEnd(const std::string& ClipName);
 
@@ -507,25 +499,6 @@ struct GameObjectInstance
 	void update(float dt);
 };
 
-class MeshGeometry
-{
-public:
-	MeshGeometry();
-	~MeshGeometry();
-
-	void SetVertexBuffer(ID3D11Device* device, const GeometryGenerator::Vertex* vertices, UINT count);
-	void SetIndexBuffer(ID3D11Device* device, const UINT* indices, UINT count);
-	void SetSubsetTable(const std::vector<Subset>& subsets);
-
-	void draw(ID3D11DeviceContext* context, UINT SubsetID);
-
-private:
-	ID3D11Buffer* mVertexBuffer;
-	ID3D11Buffer* mIndexBuffer;
-
-	std::vector<Subset> mSubsetTable;
-};
-
 struct Model3DMaterial
 {
 	Material material;
@@ -559,33 +532,6 @@ private:
 	void LoadBoneHierarchy(std::ifstream& ifs, UINT count, std::vector<UINT>& hierarchy);
 	void LoadAnimationClips(std::ifstream& ifs, UINT BoneCount, UINT ClipCount, std::map<std::string, AnimationClip>& animations);
 	void LoadAnimation(std::ifstream& ifs, UINT count, AnimationObject& animation);
-};
-
-class BasicModel
-{
-public:
-	std::vector<Model3DMaterial> mMaterials;
-	std::vector<ID3D11ShaderResourceView*> mDiffuseMapSRVs;
-	std::vector<ID3D11ShaderResourceView*> mNormalMapSRVs;
-
-	std::vector<GeometryGenerator::Vertex> mVertices;
-	std::vector<UINT> mIndices;
-	std::vector<Subset> mSubsets;
-
-	MeshGeometry mMesh;
-
-	BasicModel(ID3D11Device* device, TextureManager& manager, const std::string& filename);
-};
-
-struct BasicModelInstance
-{
-	BasicModel* model;
-	XMMATRIX world;
-
-	BasicModelInstance() :
-		model(nullptr),
-		world(XMMatrixIdentity())
-	{}
 };
 
 struct LightDirectional

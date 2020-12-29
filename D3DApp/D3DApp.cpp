@@ -3012,22 +3012,6 @@ ID3D11ShaderResourceView* TextureManager::CreateSRV(const std::wstring& filename
 	}
 }
 
-MeshGeometry::MeshGeometry() :
-	mVertexBuffer(nullptr),
-	mIndexBuffer(nullptr)
-{}
-
-MeshGeometry::~MeshGeometry()
-{
-	SafeRelease(mVertexBuffer);
-	SafeRelease(mIndexBuffer);
-}
-
-void MeshGeometry::SetVertexBuffer(ID3D11Device* device, const GeometryGenerator::Vertex* vertices, UINT count) {}
-void MeshGeometry::SetIndexBuffer(ID3D11Device* device, const UINT* indices, UINT count) {}
-void MeshGeometry::SetSubsetTable(const std::vector<Subset>& subsets) {}
-void MeshGeometry::draw(ID3D11DeviceContext* context, UINT SubsetID) {}
-
 bool Model3DLoader::load(const std::string& filename,
 						 std::vector<GeometryGenerator::Vertex>& vertices,
 						 std::vector<UINT>& indices,
@@ -3289,25 +3273,6 @@ void Model3DLoader::LoadAnimation(std::ifstream& ifs, UINT BoneCount, AnimationO
 	}
 
 	ifs >> ignore; // }
-}
-
-BasicModel::BasicModel(ID3D11Device* device, TextureManager& manager, const std::string& filename)
-{
-	Model3DLoader loader;
-	loader.load(filename, mVertices, mIndices, mSubsets, mMaterials);
-
-	mMesh.SetVertexBuffer(device, mVertices.data(), mVertices.size());
-	mMesh.SetIndexBuffer(device, mIndices.data(), mIndices.size());
-	mMesh.SetSubsetTable(mSubsets);
-
-	for (Model3DMaterial& material : mMaterials)
-	{
-		ID3D11ShaderResourceView* DiffuseMapSRV = manager.CreateSRV(material.DiffuseMapFileName);
-		mDiffuseMapSRVs.push_back(DiffuseMapSRV);
-
-		ID3D11ShaderResourceView* NormalMapSRV = manager.CreateSRV(material.NormalMapFileName);
-		mNormalMapSRVs.push_back(NormalMapSRV);
-	}
 }
 
 float SkinnedObject::GetTimeClipStart(const std::string& ClipName)
