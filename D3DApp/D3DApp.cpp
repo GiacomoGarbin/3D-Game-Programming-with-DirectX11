@@ -170,7 +170,7 @@ bool D3DApp::Init()
 	if (!InitMainWindow()) return false;
 	if (!InitDirect3D()) return false;
 
-	mTextureManager.Init(mDevice);
+	mTextureManager.Init(mDevice, mContext);
 
 	return true;
 }
@@ -2955,8 +2955,12 @@ void AnimationClip::interpolate(float t, std::vector<XMMATRIX>& transforms) cons
 }
 
 TextureManager::TextureManager() :
-	mDevice(nullptr)
-{}
+	mDevice(nullptr),
+	mContext(nullptr)
+{
+	//mTextureFolder = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+	mTextureFolder = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+}
 
 TextureManager::~TextureManager()
 {
@@ -2969,9 +2973,10 @@ TextureManager::~TextureManager()
 	mSRVs.clear();
 }
 
-void TextureManager::Init(ID3D11Device* device)
+void TextureManager::Init(ID3D11Device* device, ID3D11DeviceContext* context)
 {
 	mDevice = device;
+	mContext = context;
 }
 
 ID3D11ShaderResourceView* TextureManager::CreateSRV(const std::wstring& filename)
@@ -2984,9 +2989,7 @@ ID3D11ShaderResourceView* TextureManager::CreateSRV(const std::wstring& filename
 	}
 	else
 	{
-		//std::wstring base = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
-		std::wstring base = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
-		std::wstring path = base + filename;
+		std::wstring path = mTextureFolder + filename;
 
 		ID3D11ShaderResourceView* srv;
 		ID3D11Resource* resource = nullptr;
@@ -3007,6 +3010,118 @@ ID3D11ShaderResourceView* TextureManager::CreateSRV(const std::wstring& filename
 		}
 
 		SafeRelease(resource);
+
+		return srv;
+	}
+}
+
+ID3D11ShaderResourceView* TextureManager::CreateSRV(const std::vector<std::wstring>& filenames)
+{
+	std::wstring MapKey;
+
+	for (const std::wstring& filename : filenames)
+	{
+		MapKey += filename;
+	}
+
+	auto i = mSRVs.find(MapKey);
+
+	if (i != mSRVs.end())
+	{
+		return i->second;
+	}
+	else
+	{
+		std::vector<ID3D11Texture2D*> textures(filenames.size(), nullptr);
+
+		for (UINT i = 0; i < filenames.size(); ++i)
+		{
+			const std::wstring& filename = filenames.at(i);
+
+			auto I = mSRVs.find(filename);
+
+			if (I != mSRVs.end())
+			{
+				HR(I->second->QueryInterface(IID_ID3D11Texture2D, (void**)&textures.at(i)));
+			}
+			else
+			{
+				std::wstring path = mTextureFolder + filename;
+				ID3D11Resource* resource = nullptr;
+
+				HR(CreateDDSTextureFromFileEx(
+					mDevice,
+					path.c_str(),
+					0,
+					D3D11_USAGE_STAGING,
+					0,
+					D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE,
+					0,
+					false,
+					&resource,
+					nullptr));
+
+				HR(resource->QueryInterface(IID_ID3D11Texture2D, (void**)&textures.at(i)));
+			}
+
+
+		} // for each filename
+
+		D3D11_TEXTURE2D_DESC TextureDesc;
+		textures.front()->GetDesc(&TextureDesc);
+
+		D3D11_TEXTURE2D_DESC TextureArrayDesc;
+		TextureArrayDesc.Width = TextureDesc.Width;
+		TextureArrayDesc.Height = TextureDesc.Height;
+		TextureArrayDesc.MipLevels = TextureDesc.MipLevels;
+		TextureArrayDesc.ArraySize = textures.size();
+		TextureArrayDesc.Format = TextureDesc.Format;
+		TextureArrayDesc.SampleDesc.Count = 1;
+		TextureArrayDesc.SampleDesc.Quality = 0;
+		TextureArrayDesc.Usage = D3D11_USAGE_DEFAULT;
+		TextureArrayDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		TextureArrayDesc.CPUAccessFlags = 0;
+		TextureArrayDesc.MiscFlags = 0;
+
+		ID3D11Texture2D* TextureArray = nullptr;
+		HR(mDevice->CreateTexture2D(&TextureArrayDesc, nullptr, &TextureArray));
+
+		for (UINT ArraySlice = 0; ArraySlice < textures.size(); ++ArraySlice)
+		{
+			ID3D11Texture2D* texture = textures.at(ArraySlice);
+
+			for (UINT MipSlice = 0; MipSlice < TextureDesc.MipLevels; ++MipSlice)
+			{
+				D3D11_MAPPED_SUBRESOURCE MappedData;
+
+				HR(mContext->Map(texture, MipSlice, D3D11_MAP_READ, 0, &MappedData));
+
+				UINT subresource = D3D11CalcSubresource(MipSlice, ArraySlice, TextureDesc.MipLevels);
+				mContext->UpdateSubresource(TextureArray, subresource, nullptr, MappedData.pData, MappedData.RowPitch, MappedData.DepthPitch);
+
+				mContext->Unmap(texture, MipSlice);
+			}
+		}
+
+		ID3D11ShaderResourceView* srv;
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+		desc.Format = TextureArrayDesc.Format;
+		desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+		desc.Texture2DArray.MostDetailedMip = 0;
+		desc.Texture2DArray.MipLevels = TextureArrayDesc.MipLevels;
+		desc.Texture2DArray.FirstArraySlice = 0;
+		desc.Texture2DArray.ArraySize = textures.size();
+
+		HR(mDevice->CreateShaderResourceView(TextureArray, &desc, &srv));
+		mSRVs.emplace(MapKey, srv);
+
+		SafeRelease(TextureArray);
+
+		for (ID3D11Texture2D* texture : textures)
+		{
+			SafeRelease(texture);
+		}
 
 		return srv;
 	}
