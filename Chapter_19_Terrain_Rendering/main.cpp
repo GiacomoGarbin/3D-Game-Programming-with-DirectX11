@@ -35,6 +35,15 @@ public:
 		XMFLOAT3 pad3;
 
 		XMFLOAT4X4 mViewProj;
+
+		float mTexelCellSpaceU;
+		float mTexelCellSpaceV;
+		float mWorldCellSpace;
+		float pad4;
+		XMFLOAT2 gTexelScale;
+		XMFLOAT2 pad5;
+
+		XMFLOAT4 gWorldFrustumPlanes[6];
 	};
 
 	static_assert((sizeof(PerFrameCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
@@ -56,37 +65,6 @@ public:
 
 	ID3D11Buffer* mPerObjectCB;
 
-	struct PerSkinnedCB
-	{
-		XMFLOAT4X4 mBoneTransforms[96];
-	};
-
-	static_assert((sizeof(PerSkinnedCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
-
-	ID3D11Buffer* mPerSkinnedCB;
-
-	GameObject mSkull;
-	GameObject mBox;
-	GameObject mGrid;
-	GameObject mSphere;
-	GameObject mCylinder;
-	GameObject mSky;
-
-	//GameObject mTree;
-	//GameObject mBase;
-	//GameObject mStairs;
-	//GameObject mPillar1;
-	//GameObject mPillar2;
-	//GameObject mPillar3;
-	//GameObject mPillar4;
-	//GameObject mRock;
-
-	GameObject mCharacter;
-	GameObjectInstance mCharacterInstance1;
-	GameObjectInstance mCharacterInstance2;
-
-	std::vector<GameObjectInstance*> mObjectInstances;
-
 	std::array<LightDirectional, 3> mLights;
 	XMFLOAT3 mLightsCache[3];
 	float mLightAngle;
@@ -100,50 +78,54 @@ public:
 
 	void DrawSceneToShadowMap();
 	void DrawSceneToSSAONormalDepthMap();
+
+	GameObject mSky;
+
+	TerrainObject mTerrainObject;
+	bool mWalkCameraMode;
+
+	void ExtractFrustumPlanes(XMFLOAT4 planes[6], XMFLOAT4X4 M);
 };
 
 TestApp::TestApp() :
 	D3DApp(),
 	mPerFrameCB(nullptr),
 	mPerObjectCB(nullptr),
-	mPerSkinnedCB(nullptr),
 	mSamplerState(nullptr)
 {
 	mMainWindowTitle = "Ch19 Terrain Rendering";
 
 	//m4xMSAAEnabled = true;
 
-	mLights[0].mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-	mLights[0].mDiffuse = XMFLOAT4(1.0f, 0.9f, 0.9f, 1.0f);
+	mLights[0].mAmbient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+	mLights[0].mDiffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	mLights[0].mSpecular = XMFLOAT4(0.8f, 0.8f, 0.7f, 1.0f);
-	mLights[0].mDirection = XMFLOAT3(-0.57735f, -0.57735f, 0.57735f);
+	mLights[0].mDirection = XMFLOAT3(0.707f, -0.707f, 0.0f);
 
 	mLights[1].mAmbient = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	mLights[1].mDiffuse = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
+	mLights[1].mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
 	mLights[1].mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[1].mDirection = XMFLOAT3(0.707f, -0.707f, 0.0f);
+	mLights[1].mDirection = XMFLOAT3(0.57735f, -0.57735f, 0.57735f);
 
 	mLights[2].mAmbient = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	mLights[2].mDiffuse = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
+	mLights[2].mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
 	mLights[2].mSpecular = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	mLights[2].mDirection = XMFLOAT3(0.0f, 0.0, -1.0f);
+	mLights[2].mDirection = XMFLOAT3(-0.57735f, -0.57735f, -0.57735f);
 
 	for (UINT i = 0; i < 3; ++i)
 	{
 		mLightsCache[i] = mLights[i].mDirection;
 	}
 
-	mCamera.mPosition = XMFLOAT3(0, 2, -15);
+	mCamera.mPosition = XMFLOAT3(0, 2, 100);
 
-	mSceneBounds.Center = XMFLOAT3(0, 0, 0);
-	mSceneBounds.Radius = std::sqrt(10 * 10 + 15 * 15);
+	mWalkCameraMode = true;
 }
 
 TestApp::~TestApp()
 {
 	SafeRelease(mPerFrameCB);
 	SafeRelease(mPerObjectCB);
-	SafeRelease(mPerSkinnedCB);
 	SafeRelease(mSamplerState);
 }
 
@@ -156,123 +138,6 @@ bool TestApp::Init()
 
 	std::wstring base = L"";
 	std::wstring proj = L"";
-
-	// VS
-	{
-		Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
-		std::wstring path = base + proj + L"VS.hlsl";
-
-		ID3DBlob* pCode;
-		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
-		HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
-
-		mSkull.mVertexShader = shader;
-		mGrid.mVertexShader = shader;
-		mBox.mVertexShader = shader;
-		mCylinder.mVertexShader = shader;
-		mSphere.mVertexShader = shader;
-
-		//mTree.mVertexShader = shader;
-		//mBase.mVertexShader = shader;
-		//mStairs.mVertexShader = shader;
-		//mPillar1.mVertexShader = shader;
-		//mPillar2.mVertexShader = shader;
-		//mPillar3.mVertexShader = shader;
-		//mPillar4.mVertexShader = shader;
-		//mRock.mVertexShader = shader;
-
-		// input layout
-		{
-			std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
-			{
-				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				{"TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
-			};
-
-			Microsoft::WRL::ComPtr<ID3D11InputLayout> layout;
-
-			HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &layout));
-
-			mSkull.mInputLayout = layout;
-			mGrid.mInputLayout = layout;
-			mBox.mInputLayout = layout;
-			mCylinder.mInputLayout = layout;
-			mSphere.mInputLayout = layout;
-
-			//mTree.mInputLayout = layout;
-			//mBase.mInputLayout = layout;
-			//mStairs.mInputLayout = layout;
-			//mPillar1.mInputLayout = layout;
-			//mPillar2.mInputLayout = layout;
-			//mPillar3.mInputLayout = layout;
-			//mPillar4.mInputLayout = layout;
-			//mRock.mInputLayout = layout;
-		}
-	}
-
-	// HS
-	{
-		Microsoft::WRL::ComPtr<ID3D11HullShader> shader;
-		std::wstring path = base + proj + L"HS.hlsl";
-
-		ID3DBlob* pCode;
-		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "hs_5_0", 0, 0, &pCode, nullptr));
-		HR(mDevice->CreateHullShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
-
-		mGrid.mHullShader = shader;
-		mBox.mHullShader = shader;
-		mCylinder.mHullShader = shader;
-	}
-
-	// DS
-	{
-		Microsoft::WRL::ComPtr<ID3D11DomainShader> shader;
-		std::wstring path = base + proj + L"DS.hlsl";
-
-		ID3DBlob* pCode;
-		HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "ds_5_0", 0, 0, &pCode, nullptr));
-		HR(mDevice->CreateDomainShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
-
-		mGrid.mDomainShader = shader;
-		mBox.mDomainShader = shader;
-		mCylinder.mDomainShader = shader;
-	}
-
-	// PS
-	{
-		Microsoft::WRL::ComPtr<ID3D11PixelShader> shader;
-		std::wstring path = base + proj + L"PS.hlsl";
-
-		std::vector<D3D_SHADER_MACRO> defines;
-		defines.push_back({ "ENABLE_TEXTURE",         "1" });
-		defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
-		defines.push_back({ "ENABLE_NORMAL_MAPPING",  "1" });
-		defines.push_back({ "ENABLE_ALPHA_CLIPPING",  "0" });
-		//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-		defines.push_back({ "ENABLE_REFLECTION",      "0" });
-		defines.push_back({ "ENABLE_FOG",             "0" });
-		defines.push_back({ nullptr, nullptr });
-
-		ID3DBlob* pCode;
-		HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-		HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &shader));
-
-		mGrid.mPixelShader = shader;
-		mBox.mPixelShader = shader;
-		mCylinder.mPixelShader = shader;
-
-		//mBase.mPixelShader = shader;
-		//mStairs.mPixelShader = shader;
-		//mPillar1.mPixelShader = shader;
-		//mPillar2.mPixelShader = shader;
-		//mPillar3.mPixelShader = shader;
-		//mPillar4.mPixelShader = shader;
-		//mRock.mPixelShader = shader;
-
-		mCharacter.mPixelShader = shader;
-	}
 
 	// build per frame costant buffer
 	{
@@ -300,166 +165,6 @@ bool TestApp::Init()
 		HR(mDevice->CreateBuffer(&desc, nullptr, &mPerObjectCB));
 	}
 
-	// build per skinned constant buffer
-	{
-		D3D11_BUFFER_DESC desc;
-		desc.ByteWidth = sizeof(PerSkinnedCB);
-		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		desc.CPUAccessFlags = 0;
-		desc.MiscFlags = 0;
-		desc.StructureByteStride = 0;
-
-		HR(mDevice->CreateBuffer(&desc, nullptr, &mPerSkinnedCB));
-	}
-
-	// build skull geometry
-	{
-		GeometryGenerator::CreateSkull(mSkull.mMesh);
-
-		mSkull.mWorld = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0.0f, 1.0f, 0.0f);
-
-		mSkull.mMaterial.mAmbient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-		mSkull.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-		mSkull.mMaterial.mSpecular = XMFLOAT4(0.5f, 0.5f, 0.5f, 16.0f);
-		mSkull.mMaterial.mReflect = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
-
-		// PS
-		{
-			std::wstring path = base + proj + L"PS.hlsl";
-
-			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ "ENABLE_TEXTURE",         "0" });
-			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
-			defines.push_back({ "ENABLE_NORMAL_MAPPING",  "0" });
-			defines.push_back({ "ENABLE_ALPHA_CLIPPING",  "0" });
-			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-			defines.push_back({ "ENABLE_REFLECTION",      "1" });
-			defines.push_back({ "ENABLE_FOG",             "0" });
-			defines.push_back({ nullptr, nullptr });
-
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mSkull.mPixelShader));
-		}
-
-		// animation keyframes
-		{
-			XMVECTOR Q0 = XMQuaternionRotationAxis(XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f), XMConvertToRadians(+30.0f));
-			XMVECTOR Q1 = XMQuaternionRotationAxis(XMVectorSet(1.0f, 1.0f, 2.0f, 0.0f), XMConvertToRadians(+45.0f));
-			XMVECTOR Q2 = XMQuaternionRotationAxis(XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f), XMConvertToRadians(-30.0f));
-			XMVECTOR Q3 = XMQuaternionRotationAxis(XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f), XMConvertToRadians(+70.0f));
-
-			mSkull.mAnimation.keyframes.resize(5);
-
-			mSkull.mAnimation.keyframes[0].time = 0.0f;
-			mSkull.mAnimation.keyframes[0].translation = XMFLOAT3(-7.0f, 0.0f, 0.0f);
-			mSkull.mAnimation.keyframes[0].scale = XMFLOAT3(0.25f, 0.25f, 0.25f);
-			XMStoreFloat4(&mSkull.mAnimation.keyframes[0].rotation, Q0);
-
-			mSkull.mAnimation.keyframes[1].time = 2.0f;
-			mSkull.mAnimation.keyframes[1].translation = XMFLOAT3(0.0f, 2.0f, 10.0f);
-			mSkull.mAnimation.keyframes[1].scale = XMFLOAT3(0.5f, 0.5f, 0.5f);
-			XMStoreFloat4(&mSkull.mAnimation.keyframes[1].rotation, Q1);
-
-			mSkull.mAnimation.keyframes[2].time = 4.0f;
-			mSkull.mAnimation.keyframes[2].translation = XMFLOAT3(7.0f, 0.0f, 0.0f);
-			mSkull.mAnimation.keyframes[2].scale = XMFLOAT3(0.25f, 0.25f, 0.25f);
-			XMStoreFloat4(&mSkull.mAnimation.keyframes[2].rotation, Q2);
-
-			mSkull.mAnimation.keyframes[3].time = 6.0f;
-			mSkull.mAnimation.keyframes[3].translation = XMFLOAT3(0.0f, 1.0f, -10.0f);
-			mSkull.mAnimation.keyframes[3].scale = XMFLOAT3(0.5f, 0.5f, 0.5f);
-			XMStoreFloat4(&mSkull.mAnimation.keyframes[3].rotation, Q3);
-
-			mSkull.mAnimation.keyframes[4].time = 8.0f;
-			mSkull.mAnimation.keyframes[4].translation = XMFLOAT3(-7.0f, 0.0f, 0.0f);
-			mSkull.mAnimation.keyframes[4].scale = XMFLOAT3(0.25f, 0.25f, 0.25f);
-			XMStoreFloat4(&mSkull.mAnimation.keyframes[4].rotation, Q0);
-		}
-	}
-
-	// build grid geometry
-	{
-		GeometryGenerator::CreateGrid(20, 30, 50, 40, mGrid.mMesh);
-
-		mGrid.mTexCoordTransform = XMMatrixScaling(8, 10, 1);
-
-		mGrid.mMaterial.mAmbient = XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f);
-		mGrid.mMaterial.mDiffuse = XMFLOAT4(0.6f, 0.6f, 0.6f, 1.0f);
-		mGrid.mMaterial.mSpecular = XMFLOAT4(0.4f, 0.4f, 0.4f, 16.0f);
-		mGrid.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-
-		//mGrid.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-
-		mGrid.mAlbedoSRV = mTextureManager.CreateSRV(L"floor.dds");
-		mGrid.mNormalSRV = mTextureManager.CreateSRV(L"floor_nmap.dds");
-	}
-
-	// build box geometry
-	{
-		GeometryGenerator::CreateBox(1, 1, 1, mBox.mMesh);
-
-		mBox.mWorld = XMMatrixScaling(3.0f, 1.0f, 3.0f) * XMMatrixTranslation(0.0f, 0.5f, 0.0f);
-		mBox.mTexCoordTransform = XMMatrixScaling(2, 1, 1);
-
-		mBox.mMaterial.mAmbient = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-		mBox.mMaterial.mDiffuse = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
-		mBox.mMaterial.mSpecular = XMFLOAT4(0.8f, 0.8f, 0.8f, 16.0f);
-		mBox.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-
-		//mBox.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-
-		mBox.mAlbedoSRV = mTextureManager.CreateSRV(L"bricks.dds");
-		mBox.mNormalSRV = mTextureManager.CreateSRV(L"bricks_nmap.dds");
-	}
-
-	// build cylinder geometry
-	{
-		GeometryGenerator::CreateCylinder(0.5f, 0.5f, 3, 15, 15, mCylinder.mMesh);
-
-		mCylinder.mTexCoordTransform = XMMatrixScaling(1, 2, 1);
-
-		mCylinder.mMaterial.mAmbient = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-		mCylinder.mMaterial.mDiffuse = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
-		mCylinder.mMaterial.mSpecular = XMFLOAT4(1.0f, 1.0f, 1.0f, 32.0f);
-		mCylinder.mMaterial.mReflect = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-
-		//mCylinder.mPrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-
-		mCylinder.mAlbedoSRV = mTextureManager.CreateSRV(L"bricks.dds");
-		mCylinder.mNormalSRV = mTextureManager.CreateSRV(L"bricks_nmap.dds");
-	}
-
-	// build sphere geometry
-	{
-		GeometryGenerator::CreateSphere(0.5f, 3, mSphere.mMesh);
-
-		mSphere.mMaterial.mAmbient = XMFLOAT4(0.3f, 0.4f, 0.5f, 1.0f);
-		mSphere.mMaterial.mDiffuse = XMFLOAT4(0.2f, 0.3f, 0.4f, 1.0f);
-		mSphere.mMaterial.mSpecular = XMFLOAT4(0.9f, 0.9f, 0.9f, 16.0f);
-		mSphere.mMaterial.mReflect = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
-
-		// PS
-		{
-			std::wstring path = base + proj + L"PS.hlsl";
-
-			std::vector<D3D_SHADER_MACRO> defines;
-			defines.push_back({ "ENABLE_TEXTURE",         "0" });
-			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "1" });
-			defines.push_back({ "ENABLE_NORMAL_MAPPING",  "0" });
-			defines.push_back({ "ENABLE_ALPHA_CLIPPING",  "0" });
-			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-			defines.push_back({ "ENABLE_REFLECTION",      "1" });
-			defines.push_back({ "ENABLE_FOG",             "0" });
-			defines.push_back({ nullptr, nullptr });
-
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mSphere.mPixelShader));
-		}
-	}
-
 	// build sky geometry
 	{
 		GeometryGenerator::CreateSphere(5000, 3, mSky.mMesh);
@@ -467,7 +172,7 @@ bool TestApp::Init()
 		mSky.mRasterizerState = mNoCullRS;
 		mSky.mDepthStencilState = mLessEqualDSS;
 
-		mSky.mAlbedoSRV = mTextureManager.CreateSRV(L"desertcube1024.dds");
+		mSky.mAlbedoSRV = mTextureManager.CreateSRV(L"grasscube1024.dds");
 
 		// VS
 		{
@@ -500,150 +205,11 @@ bool TestApp::Init()
 		}
 	}
 
-	// objects
-	{
-		//mTree.LoadModel(mDevice, mTextureManager, "tree.m3d");
-		//mTree.mRasterizerState = mNoCullRS;
-
-		//// PS
-		//{
-		//	std::wstring path = base + proj + L"PS.hlsl";
-
-		//	std::vector<D3D_SHADER_MACRO> defines;
-		//	defines.push_back({ "ENABLE_TEXTURE",         "1" });
-		//	defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
-		//	defines.push_back({ "ENABLE_NORMAL_MAPPING",  "1" });
-		//	defines.push_back({ "ENABLE_ALPHA_CLIPPING",  "1" });
-		//	//defines.push_back({ "ENABLE_LIGHTING",       "1" });
-		//	defines.push_back({ "ENABLE_REFLECTION",      "0" });
-		//	defines.push_back({ "ENABLE_FOG",             "0" });
-		//	defines.push_back({ nullptr, nullptr });
-
-		//	ID3DBlob* pCode;
-		//	HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
-		//	HR(mDevice->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mTree.mPixelShader));
-		//}
-
-		//mBase.LoadModel(mDevice, mTextureManager, "base.m3d");
-		//mStairs.LoadModel(mDevice, mTextureManager, "stairs.m3d");
-		//mPillar1.LoadModel(mDevice, mTextureManager, "pillar1.m3d");
-		//mPillar2.LoadModel(mDevice, mTextureManager, "pillar2.m3d");
-		//mPillar3.LoadModel(mDevice, mTextureManager, "pillar5.m3d");
-		//mPillar4.LoadModel(mDevice, mTextureManager, "pillar6.m3d");
-		//mRock.LoadModel(mDevice, mTextureManager, "rock.m3d");
-
-		mCharacter.LoadModel(mDevice, mTextureManager, "soldier.m3d", true);
-
-		// VS
-		{
-			Microsoft::WRL::ComPtr<ID3D11VertexShader> shader;
-			std::wstring path = base + proj + L"SkinnedVS.hlsl";
-
-			ID3DBlob* pCode;
-			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
-			HR(mDevice->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mCharacter.mVertexShader));
-
-			// input layout
-			{
-				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
-				{
-					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"WEIGHTS",     0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0},
-					{"BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT,   0, 56, D3D11_INPUT_PER_VERTEX_DATA, 0}
-				};
-
-				HR(mDevice->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mCharacter.mInputLayout));
-			}
-		}
-	}
-
-	// object instances
-	{
-		//GameObjectInstance TreeInstance;
-		//TreeInstance.obj = &mTree;
-		//mObjectInstances.push_back(TreeInstance);
-
-		//GameObjectInstance BaseInstance;
-		//BaseInstance.obj = &mBase;
-		//mObjectInstances.push_back(BaseInstance);
-
-		//GameObjectInstance StairsInstance;
-		//StairsInstance.obj = &mStairs;
-		//StairsInstance.world = XMMatrixRotationY(0.5f * XM_PI) * XMMatrixTranslation(0.0f, -2.5f, -12.0f);
-		//mObjectInstances.push_back(StairsInstance);
-
-		//GameObjectInstance Pillar1Instance;
-		//Pillar1Instance.obj = &mPillar1;
-		//Pillar1Instance.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(-5.0f, 1.5f, +5.0f);
-		//mObjectInstances.push_back(Pillar1Instance);
-
-		//GameObjectInstance Pillar2Instance;
-		//Pillar2Instance.obj = &mPillar2;
-		//Pillar2Instance.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(+5.0f, 1.5f, +5.0f);
-		//mObjectInstances.push_back(Pillar2Instance);
-
-		//GameObjectInstance Pillar3Instance;
-		//Pillar3Instance.obj = &mPillar3;
-		//Pillar3Instance.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(+5.0f, 1.5f, -5.0f);
-		//mObjectInstances.push_back(Pillar3Instance);
-
-		//GameObjectInstance Pillar4Instance;
-		//Pillar4Instance.obj = &mPillar4;
-		//Pillar4Instance.world = XMMatrixScaling(1.0f, 1.0f, 1.0f) * XMMatrixTranslation(-5.0f, 1.0f, -5.0f);
-		//mObjectInstances.push_back(Pillar4Instance);
-
-		//GameObjectInstance RockInstance1;
-		//RockInstance1.obj = &mRock;
-		//RockInstance1.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(-1.0f, 1.4f, -7.0f);
-		//mObjectInstances.push_back(RockInstance1);
-
-		//GameObjectInstance RockInstance2;
-		//RockInstance2.obj = &mRock;
-		//RockInstance2.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(+5.0f, 1.2f, -2.0f);
-		//mObjectInstances.push_back(RockInstance2);
-
-		//GameObjectInstance RockInstance3;
-		//RockInstance3.obj = &mRock;
-		//RockInstance3.world = XMMatrixScaling(0.8f, 0.8f, 0.8f) * XMMatrixTranslation(-4.0f, 1.3f, +3.0f);
-		//mObjectInstances.push_back(RockInstance3);
-
-		mCharacterInstance1.obj = &mCharacter;
-		mCharacterInstance1.world = XMMatrixScaling(0.05f, 0.05f, -0.05f) * XMMatrixRotationY(XM_PI) * XMMatrixTranslation(-2.0f, 0.0f, -7.0f);
-		mCharacterInstance1.ClipName = "Take1";
-		mCharacterInstance1.transforms.resize(mCharacterInstance1.obj->mSkinnedData.mBoneHierarchy.size());
-		mObjectInstances.push_back(&mCharacterInstance1);
-
-		mCharacterInstance2.obj = &mCharacter;
-		mCharacterInstance2.world = XMMatrixScaling(0.05f, 0.05f, -0.05f) * XMMatrixRotationY(XM_PI) * XMMatrixTranslation(+2.0f, 0.0f, -7.0f);;
-		mCharacterInstance2.ClipName = "Take1";
-		mCharacterInstance2.transforms.resize(mCharacterInstance2.obj->mSkinnedData.mBoneHierarchy.size());
-		mObjectInstances.push_back(&mCharacterInstance2);
-	}
-
 	// create vertex and input buffers
 	{
-		std::array<GameObject*, 7> objects =
+		std::array<GameObject*, 1> objects =
 		{
-			&mSkull,
-			&mGrid,
-			&mBox,
-			&mCylinder,
-			&mSphere,
-			&mSky,
-
-			//&mTree,
-			//&mBase,
-			//&mStairs,
-			//&mPillar1,
-			//&mPillar2,
-			//&mPillar3,
-			//&mPillar4,
-			//&mRock,
-
-			& mCharacter
+			&mSky
 		};
 
 		std::vector<GeometryGenerator::Vertex> vertices;
@@ -728,42 +294,40 @@ bool TestApp::Init()
 		desc.MaxLOD = 0;
 
 		HR(mDevice->CreateSamplerState(&desc, &mSamplerState));
-
-		mContext->DSSetSamplers(0, 1, &mSamplerState);
-		mContext->PSSetSamplers(0, 1, &mSamplerState);
 	}
 
 	mShadowMap.Init(mDevice, 2048, 2048);
 	mShadowMap.mDebugQuad.Init(mDevice, AspectRatio(), DebugQuad::ScreenCorner::BottomLeft, 1);
-	mContext->PSSetSamplers(1, 1, &mShadowMap.GetSS());
 
 	mSSAO.Init(mDevice, mMainWindowWidth, mMainWindowHeight, mCamera.mFovAngleY, mCamera.mFarZ);
 	mSSAO.mDebugQuad.Init(mDevice, AspectRatio(), DebugQuad::ScreenCorner::BottomRight, AspectRatio());
 
-	//// scene bounds
-	//if (!mObjectInstances.empty())
-	//{
-	//	XMFLOAT3 minima = XMFLOAT3(+FLT_MAX, +FLT_MAX, +FLT_MAX);
-	//	XMFLOAT3 maxima = XMFLOAT3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-	//	XMVECTOR min = XMLoadFloat3(&minima);
-	//	XMVECTOR max = XMLoadFloat3(&maxima);
+	// terrain object
+	{
+		TerrainObject::InitInfo info;
+		info.HeightMapFileName = L"terrain.raw";
+		info.LayerMapFileName.push_back(L"grass.dds");
+		info.LayerMapFileName.push_back(L"darkdirt.dds");
+		info.LayerMapFileName.push_back(L"stone.dds");
+		info.LayerMapFileName.push_back(L"lightdirt.dds");
+		info.LayerMapFileName.push_back(L"snow.dds");
+		info.BlendMapFileName = L"blend.dds";
+		info.HeightScale = 50.0f;
+		info.HeightMapWidth = 2049;
+		info.HeightMapDepth = 2049;
+		info.CellSpacing = 0.5f;
 
-	//	for (GameObjectInstance* instance : mObjectInstances)
-	//	{
-	//		for (const auto& vertex : instance->obj->mMesh.mVertices)
-	//		{
-	//			XMVECTOR P = XMLoadFloat3(&vertex.mPosition);
-	//			min = XMVectorMin(min, P);
-	//			max = XMVectorMax(max, P);
-	//		}
-	//	}
+		mTerrainObject.init(mDevice, mContext, mTextureManager, info);
+	}
 
-	//	XMStoreFloat3(&mSceneBounds.Center, (min + max) * 0.5f);
+	// scene bounds
+	{
+		mSceneBounds.Center = XMFLOAT3(0, 0, 0);
 
-	//	XMVECTOR extents = (max - min) * 0.5f;
-	//	float RadiusSquared = XMVectorGetByIndex(XMVector3Dot(extents, extents), 0);
-	//	mSceneBounds.Radius = std::sqrt(RadiusSquared);
-	//}
+		float HalfWidth = 0.5f * mTerrainObject.GetWidth();
+		float HalfDepth = 0.5f * mTerrainObject.GetDepth();
+		mSceneBounds.Radius = std::sqrt(HalfWidth * HalfWidth + HalfDepth * HalfDepth);
+	}
 
 	return true;
 }
@@ -780,58 +344,73 @@ void TestApp::OnResize(GLFWwindow* window, int width, int height)
 
 void TestApp::UpdateScene(float dt)
 {
+	float step = 10;
+
+	if (IsKeyPressed(GLFW_KEY_LEFT_SHIFT))
+	{
+		step *= 10;
+	}
+
 	if (IsKeyPressed(GLFW_KEY_W))
 	{
-		mCamera.walk(+10 * dt);
+		mCamera.walk(+step * dt);
 	}
 
 	if (IsKeyPressed(GLFW_KEY_S))
 	{
-		mCamera.walk(-10 * dt);
+		mCamera.walk(-step * dt);
 	}
 
 	if (IsKeyPressed(GLFW_KEY_A))
 	{
-		mCamera.strafe(-10 * dt);
+		mCamera.strafe(-step * dt);
 	}
 
 	if (IsKeyPressed(GLFW_KEY_D))
 	{
-		mCamera.strafe(+10 * dt);
+		mCamera.strafe(+step * dt);
 	}
 
-	//// animate lights
-	//{
-	//	mLightAngle += 0.1f * dt;
+	// animate lights
+	{
+		mLightAngle += 0.1f * dt;
 
-	//	XMMATRIX R = XMMatrixRotationY(mLightAngle);
+		XMMATRIX R = XMMatrixRotationY(mLightAngle);
 
-	//	for (UINT i = 0; i < 3; ++i)
-	//	{
-	//		XMVECTOR D = XMLoadFloat3(&mLightsCache[i]);
-	//		D = XMVector3TransformNormal(D, R);
-	//		XMStoreFloat3(&mLights[i].mDirection, D);
-	//	}
-	//}
-
-	//// update skull animation
-	//{
-	//	mSkull.mAnimation.mCurrTime += dt;
-
-	//	if (mSkull.mAnimation.mCurrTime >= mSkull.mAnimation.GetTimeEnd())
-	//	{
-	//		mSkull.mAnimation.mCurrTime = 0;
-	//	}
-
-	//	mSkull.mAnimation.interpolate(mSkull.mAnimation.mCurrTime, mSkull.mWorld);
-	//}
-
-	// update characters animation
-	mCharacterInstance1.update(dt);
-	mCharacterInstance2.update(dt);
+		for (UINT i = 0; i < 3; ++i)
+		{
+			XMVECTOR D = XMLoadFloat3(&mLightsCache[i]);
+			D = XMVector3TransformNormal(D, R);
+			XMStoreFloat3(&mLights[i].mDirection, D);
+		}
+	}
 
 	// build shadow transform
 	mShadowMap.BuildTranform(mLights[0].mDirection, mSceneBounds);
+
+	if (IsKeyPressed(GLFW_KEY_Q))
+	{
+		mWalkCameraMode = false;
+	}
+	else
+	{
+		mWalkCameraMode = true;
+	}
+
+	// clamp camera to terrain surface in walk mode
+	if (mWalkCameraMode)
+	{
+		XMFLOAT3& CameraPosition = mCamera.mPosition;
+
+		float HalfWidth = 0.5f * mTerrainObject.GetWidth();
+		float HalfDepth = 0.5f * mTerrainObject.GetDepth();
+
+		CameraPosition.x = std::clamp(CameraPosition.x, -HalfWidth, +HalfWidth);
+		CameraPosition.z = std::clamp(CameraPosition.z, -HalfDepth, +HalfDepth);
+
+		float y = mTerrainObject.GetHeight(CameraPosition.x, CameraPosition.z);
+		CameraPosition = XMFLOAT3(CameraPosition.x, y + 2.0f, CameraPosition.z);
+	}
 
 	mCamera.UpdateView();
 }
@@ -840,125 +419,31 @@ void TestApp::DrawSceneToShadowMap()
 {
 	XMMATRIX view = XMLoadFloat4x4(&mShadowMap.mLightView);
 	XMMATRIX proj = XMLoadFloat4x4(&mShadowMap.mLightProj);
-	XMMATRIX ViewProj = XMMatrixMultiply(view, proj);
+	XMMATRIX ViewProj = view * proj;
 
-	auto SetPerObjectCB = [this, &ViewProj](GameObject* obj) -> void
+	// draw terrain
 	{
-		ShadowMap::PerObjectCB buffer;
-		XMStoreFloat4x4(&buffer.mWorldViewProj, obj->mWorld * ViewProj);
-		XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexCoordTransform);
-		mContext->UpdateSubresource(mShadowMap.GetCB(), 0, nullptr, &buffer, 0, 0);
-		mContext->VSSetConstantBuffers(0, 1, &mShadowMap.GetCB());
-	};
-
-	auto DrawGameObject = [this, &SetPerObjectCB](GameObject* obj) -> void
-	{
-		FLOAT BlendFactor[] = { 0, 0, 0, 0 };
-
-		// shaders
-		mContext->VSSetShader(mShadowMap.GetVS(), nullptr, 0);
-		mContext->PSSetShader(nullptr, nullptr, 0);
-
-		// input layout
-		mContext->IASetInputLayout(mShadowMap.GetIL());
-
-		// primitive topology
-		mContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		// vertex and index buffers
-		if (obj->mInstancedBuffer)
-		{
-			UINT stride[2] = { sizeof(GeometryGenerator::Vertex), sizeof(GameObject::InstancedData) };
-			UINT offset[2] = { 0, 0 };
-
-			ID3D11Buffer* vbs[2] = { obj->mVertexBuffer.Get(), obj->mInstancedBuffer };
-
-			mContext->IASetVertexBuffers(0, 2, vbs, stride, offset);
-			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		}
-		else
-		{
-			UINT stride = sizeof(GeometryGenerator::Vertex);
-			UINT offset = 0;
-
-			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
-			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		}
-
-		//  per object constant buffer
-		SetPerObjectCB(obj);
-
-		// textures
-		{
-			mContext->PSSetShaderResources(0, 1, &obj->mAlbedoSRV);
-			//mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
-			//mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
-		}
-
-		// rasterizer, blend and depth-stencil states
-		mContext->RSSetState(mShadowMap.GetRS());
-		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
-		mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
-
-		// draw call
-		if (obj->mIndexBuffer && obj->mInstancedBuffer)
-		{
-			mContext->DrawIndexedInstanced(obj->mMesh.mIndices.size(), obj->mVisibleInstanceCount, 0, 0, 0);
-		}
-		else if (obj->mIndexBuffer)
-		{
-			mContext->DrawIndexed(obj->mMesh.mIndices.size(), obj->mIndexStart, obj->mVertexStart);
-		}
-		else
-		{
-			mContext->Draw(obj->mMesh.mVertices.size(), obj->mVertexStart);
-		}
-
-		// unbind SRV
-		ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
-		mContext->PSSetShaderResources(0, 2, NullSRV);
-	};
-
-	DrawGameObject(&mGrid);
-	DrawGameObject(&mBox);
-	DrawGameObject(&mSkull);
-
-	for (UINT i = 0; i < 5; ++i)
-	{
-		mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
-		DrawGameObject(&mCylinder);
-		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
-		DrawGameObject(&mCylinder);
-
-		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
-		DrawGameObject(&mSphere);
-		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
-		DrawGameObject(&mSphere);
-	}
-
-	for (GameObjectInstance* instance : mObjectInstances)
-	{
-		GameObject* obj = instance->obj;
-
 		// shaders
 		{
-			mContext->VSSetShader(mShadowMap.GetVS(obj->mIsSkinned), nullptr, 0);
-			mContext->PSSetShader(mShadowMap.GetPS(), nullptr, 0);
+			mContext->VSSetShader(mTerrainObject.mVertexShader, nullptr, 0);
+			mContext->HSSetShader(mTerrainObject.mHullShader, nullptr, 0);
+			mContext->DSSetShader(mTerrainObject.mDomainShader, nullptr, 0);
+			mContext->PSSetShader(nullptr, nullptr, 0);
 		}
 
 		// input layout
-		mContext->IASetInputLayout(mShadowMap.GetIL(obj->mIsSkinned));
+		mContext->IASetInputLayout(mTerrainObject.mInputLayout);
 
 		// primitive topology
-		mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
+		mContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST);
 
 		// vertex and index buffers
 		{
-			UINT stride = sizeof(GeometryGenerator::Vertex);
+			UINT stride = sizeof(TerrainObject::VertexData);
 			UINT offset = 0;
 
-			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
-			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+			mContext->IASetVertexBuffers(0, 1, &mTerrainObject.mPatchQuadVB, &stride, &offset);
+			mContext->IASetIndexBuffer(mTerrainObject.mPatchQuadIB, DXGI_FORMAT_R32_UINT, 0);
 		}
 
 		// rasterizer, blend and depth-stencil states
@@ -966,235 +451,339 @@ void TestApp::DrawSceneToShadowMap()
 			mContext->RSSetState(mShadowMap.GetRS());
 
 			FLOAT BlendFactor[] = { 0, 0, 0, 0 };
-			mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+			mContext->OMSetBlendState(nullptr, BlendFactor, 0xFFFFFFFF);
 
-			mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+			mContext->OMSetDepthStencilState(nullptr, 0);
+		}
+
+		XMMATRIX W = mTerrainObject.mWorld;
+		XMMATRIX WorldViewProj = W * ViewProj;
+		XMMATRIX S = XMLoadFloat4x4(&mShadowMap.mShadowTransform);
+
+		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
+		XMMATRIX T
+		(
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
+			+0.5f, +0.5f, 0.0f, 1.0f
+		);
+
+		// per frame constant buffer
+		{
+			PerFrameCB buffer;
+			buffer.mLights[0] = mLights[0];
+			buffer.mLights[1] = mLights[1];
+			buffer.mLights[2] = mLights[2];
+			buffer.mEyePositionW = mCamera.mPosition;
+			buffer.mFogStart = 15;
+			buffer.mFogRange = 175;
+			XMStoreFloat4(&buffer.mFogColor, Colors::Silver);
+			buffer.mHeightScale = 0.07f;
+			buffer.mMinTessDistance = 20;
+			buffer.mMaxTessDistance = 500;
+			buffer.mMinTessFactor = 0;
+			buffer.mMaxTessFactor = 6;
+			XMStoreFloat4x4(&buffer.mViewProj, ViewProj);
+
+			buffer.mTexelCellSpaceU = 1.0f / mTerrainObject.mInitInfo.HeightMapWidth;
+			buffer.mTexelCellSpaceV = 1.0f / mTerrainObject.mInitInfo.HeightMapDepth;
+			buffer.mWorldCellSpace = mTerrainObject.mInitInfo.CellSpacing;
+
+			buffer.gTexelScale = XMFLOAT2(50, 50);
+
+			XMFLOAT4X4 M;
+			XMStoreFloat4x4(&M, ViewProj);
+			XMFLOAT4 WorldFrustumPlanes[6];
+			ExtractFrustumPlanes(WorldFrustumPlanes, M);
+			CopyMemory(buffer.gWorldFrustumPlanes, WorldFrustumPlanes, sizeof(buffer.gWorldFrustumPlanes));
+
+			mContext->UpdateSubresource(mPerFrameCB, 0, 0, &buffer, 0, 0);
+
+			mContext->VSSetConstantBuffers(0, 1, &mPerFrameCB);
+			mContext->HSSetConstantBuffers(0, 1, &mPerFrameCB);
+			mContext->DSSetConstantBuffers(0, 1, &mPerFrameCB);
 		}
 
 		// per object constant buffer
 		{
-			ShadowMap::PerObjectCB buffer;
-			XMStoreFloat4x4(&buffer.mWorldViewProj, instance->world * ViewProj);
-			XMStoreFloat4x4(&buffer.mTexTransform, obj->mTexCoordTransform);
-			mContext->UpdateSubresource(mShadowMap.GetCB(), 0, nullptr, &buffer, 0, 0);
-			mContext->VSSetConstantBuffers(0, 1, &mShadowMap.GetCB());
+			PerObjectCB buffer;
+			XMStoreFloat4x4(&buffer.mWorld, W);
+			XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(W));
+			XMStoreFloat4x4(&buffer.mWorldViewProj, WorldViewProj);
+			buffer.mMaterial = mTerrainObject.mMaterial;
+			XMStoreFloat4x4(&buffer.mTexCoordTransform, XMMatrixIdentity());
+			XMStoreFloat4x4(&buffer.mShadowTransform, W * S);
+			XMStoreFloat4x4(&buffer.mWorldViewProjTexture, WorldViewProj * T);
+
+			mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
+
+			mContext->VSSetConstantBuffers(1, 1, &mPerObjectCB);
 		}
 
-		// per skinned constant buffer
+		// SRVs
 		{
-			PerSkinnedCB buffer;
-			ZeroMemory(&buffer.mBoneTransforms, sizeof(buffer.mBoneTransforms));
-			CopyMemory(&buffer.mBoneTransforms, instance->transforms.data(), instance->transforms.size() * sizeof(XMFLOAT4X4));
-
-			mContext->UpdateSubresource(mPerSkinnedCB, 0, 0, &buffer, 0, 0);
-			mContext->VSSetConstantBuffers(2, 1, &mPerSkinnedCB);
+			mContext->VSSetShaderResources(0, 1, &mTerrainObject.mHeightMapSRV);
+			mContext->DSSetShaderResources(0, 1, &mTerrainObject.mHeightMapSRV);
 		}
 
-		for (UINT i = 0; i < obj->mSubsets.size(); ++i)
+		// sampler states
 		{
-			// bind SRVs
-			{
-				mContext->PSSetShaderResources(0, 1, &obj->mDiffuseMapSRVs[i]);
-			}
+			mContext->VSSetSamplers(0, 1, &mTerrainObject.mHeightMapSS);
+			mContext->DSSetSamplers(0, 1, &mTerrainObject.mHeightMapSS);
+		}
 
-			// draw call
-			const Subset& subset = obj->mSubsets[i];
-			mContext->DrawIndexed(subset.FaceCount * 3, obj->mIndexStart + subset.FaceStart * 3, obj->mVertexStart);
+		// draw call
+		{
+			mContext->DrawIndexed(mTerrainObject.mPatchQuadFaces * 4, 0, 0);
+		}
 
-			// unbind SRVs
-			{
-				ID3D11ShaderResourceView* const NullSRVs[1] = { nullptr };
-				mContext->PSSetShaderResources(0, 1, NullSRVs);
-			}
+		// unbind SRVs
+		{
+			ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
+			mContext->VSSetShaderResources(0, 1, NullSRV);
+			mContext->DSSetShaderResources(0, 1, NullSRV);
+		}
+
+		// unbind shaders
+		{
+			mContext->HSSetShader(nullptr, nullptr, 0);
+			mContext->DSSetShader(nullptr, nullptr, 0);
 		}
 	}
 }
 
 void TestApp::DrawSceneToSSAONormalDepthMap()
 {
-	auto SetPerObjectCB = [this](GameObject* obj) -> void
+	//auto SetPerObjectCB = [this](GameObject* obj) -> void
+	//{
+	//	XMMATRIX view = XMLoadFloat4x4(&mCamera.mView);
+	//	XMMATRIX WorldView = obj->mWorld * view;
+
+	//	SSAO::NormalDepthCB buffer;
+	//	XMStoreFloat4x4(&buffer.WorldView, WorldView);
+	//	XMStoreFloat4x4(&buffer.WorldViewProj, WorldView * mCamera.mProj);
+	//	XMStoreFloat4x4(&buffer.WorldInverseTransposeView, GameMath::InverseTranspose(obj->mWorld) * view);
+	//	XMStoreFloat4x4(&buffer.TexCoordTransform, obj->mTexCoordTransform);
+	//	mContext->UpdateSubresource(mSSAO.GetNormalDepthCB(), 0, nullptr, &buffer, 0, 0);
+	//	mContext->VSSetConstantBuffers(0, 1, &mSSAO.GetNormalDepthCB());
+	//};
+
+	//auto DrawGameObject = [this, &SetPerObjectCB](GameObject* obj) -> void
+	//{
+	//	FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+
+	//	// shaders
+	//	mContext->VSSetShader(mSSAO.GetNormalDepthVS(), nullptr, 0);
+	//	mContext->PSSetShader(mSSAO.GetNormalDepthPS(), nullptr, 0);
+
+	//	// input layout
+	//	mContext->IASetInputLayout(mSSAO.GetNormalDepthIL());
+
+	//	// primitive topology
+	//	mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
+
+	//	// vertex and index buffers
+	//	if (obj->mInstancedBuffer)
+	//	{
+	//		UINT stride[2] = { sizeof(GeometryGenerator::Vertex), sizeof(GameObject::InstancedData) };
+	//		UINT offset[2] = { 0, 0 };
+
+	//		ID3D11Buffer* vbs[2] = { obj->mVertexBuffer.Get(), obj->mInstancedBuffer };
+
+	//		mContext->IASetVertexBuffers(0, 2, vbs, stride, offset);
+	//		mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	//	}
+	//	else
+	//	{
+	//		UINT stride = sizeof(GeometryGenerator::Vertex);
+	//		UINT offset = 0;
+
+	//		mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
+	//		mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	//	}
+
+	//	//  per object constant buffer
+	//	SetPerObjectCB(obj);
+
+	//	// textures
+	//	{
+	//		mContext->PSSetShaderResources(0, 1, &obj->mAlbedoSRV);
+
+	//		// TODO : add normal mapping ?
+
+	//		//mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+	//		//mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
+	//	}
+
+	//	// rasterizer, blend and depth-stencil states
+	//	mContext->RSSetState(obj->mRasterizerState.Get());
+	//	mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+	//	mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+
+	//	// draw call
+	//	if (obj->mIndexBuffer && obj->mInstancedBuffer)
+	//	{
+	//		mContext->DrawIndexedInstanced(obj->mMesh.mIndices.size(), obj->mVisibleInstanceCount, 0, 0, 0);
+	//	}
+	//	else if (obj->mIndexBuffer)
+	//	{
+	//		mContext->DrawIndexed(obj->mMesh.mIndices.size(), obj->mIndexStart, obj->mVertexStart);
+	//	}
+	//	else
+	//	{
+	//		mContext->Draw(obj->mMesh.mVertices.size(), obj->mVertexStart);
+	//	}
+
+	//	// unbind SRV
+	//	ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
+	//	mContext->PSSetShaderResources(0, 1, NullSRV);
+	//};
+
+	//DrawGameObject(&mGrid);
+	//DrawGameObject(&mBox);
+	//DrawGameObject(&mSkull);
+
+	//for (UINT i = 0; i < 5; ++i)
+	//{
+	//	mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
+	//	DrawGameObject(&mCylinder);
+	//	mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
+	//	DrawGameObject(&mCylinder);
+
+	//	mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
+	//	DrawGameObject(&mSphere);
+	//	mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
+	//	DrawGameObject(&mSphere);
+	//}
+
+	//for (GameObjectInstance* instance : mObjectInstances)
+	//{
+	//	GameObject* obj = instance->obj;
+
+	//	// vertex shader
+	//	{
+	//		mContext->VSSetShader(mSSAO.GetNormalDepthVS(obj->mIsSkinned), nullptr, 0);
+	//	}
+
+	//	// input layout
+	//	mContext->IASetInputLayout(mSSAO.GetNormalDepthIL(obj->mIsSkinned));
+
+	//	// primitive topology
+	//	mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
+
+	//	// vertex and index buffers
+	//	{
+	//		UINT stride = sizeof(GeometryGenerator::Vertex);
+	//		UINT offset = 0;
+
+	//		mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
+	//		mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	//	}
+
+	//	// rasterizer, blend and depth-stencil states
+	//	{
+	//		mContext->RSSetState(obj->mRasterizerState.Get());
+
+	//		FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+	//		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+
+	//		mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
+	//	}
+
+	//	// per object constant buffer
+	//	{
+	//		XMMATRIX view = XMLoadFloat4x4(&mCamera.mView);
+	//		XMMATRIX WorldView = instance->world * view;
+
+	//		SSAO::NormalDepthCB buffer;
+	//		XMStoreFloat4x4(&buffer.WorldView, WorldView);
+	//		XMStoreFloat4x4(&buffer.WorldViewProj, WorldView * mCamera.mProj);
+	//		XMStoreFloat4x4(&buffer.WorldInverseTransposeView, GameMath::InverseTranspose(instance->world) * view);
+	//		XMStoreFloat4x4(&buffer.TexCoordTransform, obj->mTexCoordTransform);
+	//		mContext->UpdateSubresource(mSSAO.GetNormalDepthCB(), 0, nullptr, &buffer, 0, 0);
+	//		mContext->VSSetConstantBuffers(0, 1, &mSSAO.GetNormalDepthCB());
+	//	}
+
+	//	// per skinned constant buffer
+	//	{
+	//		PerSkinnedCB buffer;
+	//		ZeroMemory(&buffer.mBoneTransforms, sizeof(buffer.mBoneTransforms));
+	//		CopyMemory(&buffer.mBoneTransforms, instance->transforms.data(), instance->transforms.size() * sizeof(XMFLOAT4X4));
+
+	//		mContext->UpdateSubresource(mPerSkinnedCB, 0, 0, &buffer, 0, 0);
+	//		mContext->VSSetConstantBuffers(2, 1, &mPerSkinnedCB);
+	//	}
+
+	//	for (UINT i = 0; i < obj->mSubsets.size(); ++i)
+	//	{
+	//		// pixel shader
+	//		{
+	//			mContext->PSSetShader(mSSAO.GetNormalDepthPS(obj->mIsAlphaClipping[i]), nullptr, 0);
+	//		}
+
+	//		// bind SRVs
+	//		{
+	//			mContext->PSSetShaderResources(0, 1, &obj->mDiffuseMapSRVs[i]);
+	//			//mContext->PSSetShaderResources(1, 1, &obj->mNormalMapSRVs[i]);
+	//		}
+
+	//		// draw call
+	//		const Subset& subset = obj->mSubsets[i];
+	//		mContext->DrawIndexed(subset.FaceCount * 3, obj->mIndexStart + subset.FaceStart * 3, obj->mVertexStart);
+
+	//		// unbind SRVs
+	//		{
+	//			ID3D11ShaderResourceView* const NullSRVs[2] = { nullptr, nullptr };
+	//			mContext->PSSetShaderResources(0, 2, NullSRVs);
+	//		}
+	//	}
+	//}
+}
+
+void TestApp::ExtractFrustumPlanes(XMFLOAT4 planes[6], XMFLOAT4X4 M)
+{
+	// left
+	planes[0].x = M(0, 3) + M(0, 0);
+	planes[0].y = M(1, 3) + M(1, 0);
+	planes[0].z = M(2, 3) + M(2, 0);
+	planes[0].w = M(3, 3) + M(3, 0);
+
+	// right
+	planes[1].x = M(0, 3) - M(0, 0);
+	planes[1].y = M(1, 3) - M(1, 0);
+	planes[1].z = M(2, 3) - M(2, 0);
+	planes[1].w = M(3, 3) - M(3, 0);
+
+	// bottom
+	planes[2].x = M(0, 3) + M(0, 1);
+	planes[2].y = M(1, 3) + M(1, 1);
+	planes[2].z = M(2, 3) + M(2, 1);
+	planes[2].w = M(3, 3) + M(3, 1);
+
+	// top
+	planes[3].x = M(0, 3) - M(0, 1);
+	planes[3].y = M(1, 3) - M(1, 1);
+	planes[3].z = M(2, 3) - M(2, 1);
+	planes[3].w = M(3, 3) - M(3, 1);
+
+	// near
+	planes[4].x = M(0, 2);
+	planes[4].y = M(1, 2);
+	planes[4].z = M(2, 2);
+	planes[4].w = M(3, 2);
+
+	// far
+	planes[5].x = M(0, 3) - M(0, 2);
+	planes[5].y = M(1, 3) - M(1, 2);
+	planes[5].z = M(2, 3) - M(2, 2);
+	planes[5].w = M(3, 3) - M(3, 2);
+
+	// normalize the plane equations
+	for (int i = 0; i < 6; ++i)
 	{
-		XMMATRIX view = XMLoadFloat4x4(&mCamera.mView);
-		XMMATRIX WorldView = obj->mWorld * view;
-
-		SSAO::NormalDepthCB buffer;
-		XMStoreFloat4x4(&buffer.WorldView, WorldView);
-		XMStoreFloat4x4(&buffer.WorldViewProj, WorldView * mCamera.mProj);
-		XMStoreFloat4x4(&buffer.WorldInverseTransposeView, GameMath::InverseTranspose(obj->mWorld) * view);
-		XMStoreFloat4x4(&buffer.TexCoordTransform, obj->mTexCoordTransform);
-		mContext->UpdateSubresource(mSSAO.GetNormalDepthCB(), 0, nullptr, &buffer, 0, 0);
-		mContext->VSSetConstantBuffers(0, 1, &mSSAO.GetNormalDepthCB());
-	};
-
-	auto DrawGameObject = [this, &SetPerObjectCB](GameObject* obj) -> void
-	{
-		FLOAT BlendFactor[] = { 0, 0, 0, 0 };
-
-		// shaders
-		mContext->VSSetShader(mSSAO.GetNormalDepthVS(), nullptr, 0);
-		mContext->PSSetShader(mSSAO.GetNormalDepthPS(), nullptr, 0);
-
-		// input layout
-		mContext->IASetInputLayout(mSSAO.GetNormalDepthIL());
-
-		// primitive topology
-		mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
-
-		// vertex and index buffers
-		if (obj->mInstancedBuffer)
-		{
-			UINT stride[2] = { sizeof(GeometryGenerator::Vertex), sizeof(GameObject::InstancedData) };
-			UINT offset[2] = { 0, 0 };
-
-			ID3D11Buffer* vbs[2] = { obj->mVertexBuffer.Get(), obj->mInstancedBuffer };
-
-			mContext->IASetVertexBuffers(0, 2, vbs, stride, offset);
-			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		}
-		else
-		{
-			UINT stride = sizeof(GeometryGenerator::Vertex);
-			UINT offset = 0;
-
-			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
-			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		}
-
-		//  per object constant buffer
-		SetPerObjectCB(obj);
-
-		// textures
-		{
-			mContext->PSSetShaderResources(0, 1, &obj->mAlbedoSRV);
-
-			// TODO : add normal mapping ?
-
-			//mContext->DSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
-			//mContext->PSSetShaderResources(1, 1, obj->mNormalSRV.GetAddressOf());
-		}
-
-		// rasterizer, blend and depth-stencil states
-		mContext->RSSetState(obj->mRasterizerState.Get());
-		mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
-		mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
-
-		// draw call
-		if (obj->mIndexBuffer && obj->mInstancedBuffer)
-		{
-			mContext->DrawIndexedInstanced(obj->mMesh.mIndices.size(), obj->mVisibleInstanceCount, 0, 0, 0);
-		}
-		else if (obj->mIndexBuffer)
-		{
-			mContext->DrawIndexed(obj->mMesh.mIndices.size(), obj->mIndexStart, obj->mVertexStart);
-		}
-		else
-		{
-			mContext->Draw(obj->mMesh.mVertices.size(), obj->mVertexStart);
-		}
-
-		// unbind SRV
-		ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
-		mContext->PSSetShaderResources(0, 1, NullSRV);
-	};
-
-	DrawGameObject(&mGrid);
-	DrawGameObject(&mBox);
-	DrawGameObject(&mSkull);
-
-	for (UINT i = 0; i < 5; ++i)
-	{
-		mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
-		DrawGameObject(&mCylinder);
-		mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
-		DrawGameObject(&mCylinder);
-
-		mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
-		DrawGameObject(&mSphere);
-		mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
-		DrawGameObject(&mSphere);
-	}
-
-	for (GameObjectInstance* instance : mObjectInstances)
-	{
-		GameObject* obj = instance->obj;
-
-		// vertex shader
-		{
-			mContext->VSSetShader(mSSAO.GetNormalDepthVS(obj->mIsSkinned), nullptr, 0);
-		}
-
-		// input layout
-		mContext->IASetInputLayout(mSSAO.GetNormalDepthIL(obj->mIsSkinned));
-
-		// primitive topology
-		mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
-
-		// vertex and index buffers
-		{
-			UINT stride = sizeof(GeometryGenerator::Vertex);
-			UINT offset = 0;
-
-			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
-			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		}
-
-		// rasterizer, blend and depth-stencil states
-		{
-			mContext->RSSetState(obj->mRasterizerState.Get());
-
-			FLOAT BlendFactor[] = { 0, 0, 0, 0 };
-			mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
-
-			mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
-		}
-
-		// per object constant buffer
-		{
-			XMMATRIX view = XMLoadFloat4x4(&mCamera.mView);
-			XMMATRIX WorldView = instance->world * view;
-
-			SSAO::NormalDepthCB buffer;
-			XMStoreFloat4x4(&buffer.WorldView, WorldView);
-			XMStoreFloat4x4(&buffer.WorldViewProj, WorldView * mCamera.mProj);
-			XMStoreFloat4x4(&buffer.WorldInverseTransposeView, GameMath::InverseTranspose(instance->world) * view);
-			XMStoreFloat4x4(&buffer.TexCoordTransform, obj->mTexCoordTransform);
-			mContext->UpdateSubresource(mSSAO.GetNormalDepthCB(), 0, nullptr, &buffer, 0, 0);
-			mContext->VSSetConstantBuffers(0, 1, &mSSAO.GetNormalDepthCB());
-		}
-
-		// per skinned constant buffer
-		{
-			PerSkinnedCB buffer;
-			ZeroMemory(&buffer.mBoneTransforms, sizeof(buffer.mBoneTransforms));
-			CopyMemory(&buffer.mBoneTransforms, instance->transforms.data(), instance->transforms.size() * sizeof(XMFLOAT4X4));
-
-			mContext->UpdateSubresource(mPerSkinnedCB, 0, 0, &buffer, 0, 0);
-			mContext->VSSetConstantBuffers(2, 1, &mPerSkinnedCB);
-		}
-
-		for (UINT i = 0; i < obj->mSubsets.size(); ++i)
-		{
-			// pixel shader
-			{
-				mContext->PSSetShader(mSSAO.GetNormalDepthPS(obj->mIsAlphaClipping[i]), nullptr, 0);
-			}
-
-			// bind SRVs
-			{
-				mContext->PSSetShaderResources(0, 1, &obj->mDiffuseMapSRVs[i]);
-				//mContext->PSSetShaderResources(1, 1, &obj->mNormalMapSRVs[i]);
-			}
-
-			// draw call
-			const Subset& subset = obj->mSubsets[i];
-			mContext->DrawIndexed(subset.FaceCount * 3, obj->mIndexStart + subset.FaceStart * 3, obj->mVertexStart);
-
-			// unbind SRVs
-			{
-				ID3D11ShaderResourceView* const NullSRVs[2] = { nullptr, nullptr };
-				mContext->PSSetShaderResources(0, 2, NullSRVs);
-			}
-		}
+		XMVECTOR v = XMPlaneNormalize(XMLoadFloat4(&planes[i]));
+		XMStoreFloat4(&planes[i], v);
 	}
 }
 
@@ -1235,8 +824,7 @@ void TestApp::DrawScene()
 	mContext->RSSetViewports(1, &mViewport);
 
 	mContext->ClearRenderTargetView(mRenderTargetView, Colors::Silver);
-	//mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
-	//mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
+	mContext->ClearDepthStencilView(mDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 
 	// bind shadow map and ambient map as SRV
 	mContext->PSSetShaderResources(3, 1, &mShadowMap.GetSRV());
@@ -1263,7 +851,6 @@ void TestApp::DrawScene()
 		mContext->UpdateSubresource(mPerFrameCB, 0, 0, &buffer, 0, 0);
 
 		mContext->VSSetConstantBuffers(1, 1, &mPerFrameCB);
-		//mContext->DSSetConstantBuffers(1, 1, &mPerFrameCB);
 		mContext->PSSetConstantBuffers(1, 1, &mPerFrameCB);
 	};
 
@@ -1275,9 +862,9 @@ void TestApp::DrawScene()
 		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
 		XMMATRIX T
 		(
-			+0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, -0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
 			+0.5f, +0.5f, 0.0f, 1.0f
 		);
 
@@ -1343,6 +930,14 @@ void TestApp::DrawScene()
 			mContext->PSSetShaderResources(1, 1, &obj->mNormalSRV);
 		}
 
+		// bind sampler states
+		{
+			mContext->DSSetSamplers(0, 1, &mSamplerState);
+			mContext->PSSetSamplers(0, 1, &mSamplerState);
+
+			mContext->PSSetSamplers(1, 1, &mShadowMap.GetSS());
+		}
+
 		// rasterizer, blend and depth-stencil states
 
 		if (IsKeyPressed(GLFW_KEY_1))
@@ -1384,68 +979,29 @@ void TestApp::DrawScene()
 		mContext->PSSetShaderResources(0, 2, NullSRV);
 	};
 
-	SetPerFrameCB();
-
-	// draw without reflection
+	// draw terrain
 	{
-		DrawGameObject(&mGrid);
-		DrawGameObject(&mBox);
-
-		for (UINT i = 0; i < 5; ++i)
-		{
-			mCylinder.mWorld = XMMatrixTranslation(-5, 1.5f, -10 + i * 5.0f);
-			DrawGameObject(&mCylinder);
-			mCylinder.mWorld = XMMatrixTranslation(+5, 1.5f, -10 + i * 5.0f);
-			DrawGameObject(&mCylinder);
-		}
-	}
-
-	// turn off tessellation
-
-	// draw with reflection
-	{
-		// bind cube map SRV
-		mContext->PSSetShaderResources(2, 1, &mSky.mAlbedoSRV);
-
-		DrawGameObject(&mSkull);
-
-		for (UINT i = 0; i < 5; ++i)
-		{
-			mSphere.mWorld = XMMatrixTranslation(-5, 3.5f, -10 + i * 5.0f);
-			DrawGameObject(&mSphere);
-			mSphere.mWorld = XMMatrixTranslation(+5, 3.5f, -10 + i * 5.0f);
-			DrawGameObject(&mSphere);
-		}
-
-		// unbind SRV
-		ID3D11ShaderResourceView* const NullSRV = nullptr;
-		mContext->PSSetShaderResources(2, 1, &NullSRV);
-	}
-
-	// draw animated characters
-	for (GameObjectInstance* instance : mObjectInstances)
-	{
-		GameObject* obj = instance->obj;
-
 		// shaders
 		{
-			mContext->VSSetShader(obj->mVertexShader.Get(), nullptr, 0);
-			mContext->PSSetShader(obj->mPixelShader.Get(), nullptr, 0);
+			mContext->VSSetShader(mTerrainObject.mVertexShader, nullptr, 0);
+			mContext->HSSetShader(mTerrainObject.mHullShader, nullptr, 0);
+			mContext->DSSetShader(mTerrainObject.mDomainShader, nullptr, 0);
+			mContext->PSSetShader(mTerrainObject.mPixelShader, nullptr, 0);
 		}
 
 		// input layout
-		mContext->IASetInputLayout(obj->mInputLayout.Get());
+		mContext->IASetInputLayout(mTerrainObject.mInputLayout);
 
 		// primitive topology
-		mContext->IASetPrimitiveTopology(obj->mPrimitiveTopology);
+		mContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST);
 
 		// vertex and index buffers
 		{
-			UINT stride = sizeof(GeometryGenerator::Vertex);
+			UINT stride = sizeof(TerrainObject::VertexData);
 			UINT offset = 0;
 
-			mContext->IASetVertexBuffers(0, 1, obj->mVertexBuffer.GetAddressOf(), &stride, &offset);
-			mContext->IASetIndexBuffer(obj->mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+			mContext->IASetVertexBuffers(0, 1, &mTerrainObject.mPatchQuadVB, &stride, &offset);
+			mContext->IASetIndexBuffer(mTerrainObject.mPatchQuadIB, DXGI_FORMAT_R32_UINT, 0);
 		}
 
 		// rasterizer, blend and depth-stencil states
@@ -1456,84 +1012,137 @@ void TestApp::DrawScene()
 			}
 			else
 			{
-				mContext->RSSetState(obj->mRasterizerState.Get());
+				mContext->RSSetState(nullptr);
 			}
 
 			FLOAT BlendFactor[] = { 0, 0, 0, 0 };
-			mContext->OMSetBlendState(obj->mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+			mContext->OMSetBlendState(nullptr, BlendFactor, 0xFFFFFFFF);
 
-			if (obj->mDepthStencilState.Get() != nullptr || IsKeyPressed(GLFW_KEY_1))
-			{
-				mContext->OMSetDepthStencilState(obj->mDepthStencilState.Get(), obj->mStencilRef);
-			}
-			else
-			{
-				mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
-			}
+			mContext->OMSetDepthStencilState(nullptr, 0);
+			//mContext->OMSetDepthStencilState(mEqualDSS.Get(), 0);
 		}
 
-		// per skinned constant buffer
-		{
-			PerSkinnedCB buffer;
-			ZeroMemory(&buffer.mBoneTransforms, sizeof(buffer.mBoneTransforms));
-			CopyMemory(&buffer.mBoneTransforms, instance->transforms.data(), instance->transforms.size() * sizeof(XMFLOAT4X4));
-
-			mContext->UpdateSubresource(mPerSkinnedCB, 0, 0, &buffer, 0, 0);
-			mContext->VSSetConstantBuffers(2, 1, &mPerSkinnedCB);
-		}
-
-		XMMATRIX W = instance->world;
+		XMMATRIX W = mTerrainObject.mWorld;
 		XMMATRIX V = XMLoadFloat4x4(&mCamera.mView);
-		XMMATRIX WorldViewProj = W * V * mCamera.mProj;
+		XMMATRIX ViewProj = V * mCamera.mProj;
+		XMMATRIX WorldViewProj = W * ViewProj;
 		XMMATRIX S = XMLoadFloat4x4(&mShadowMap.mShadowTransform);
-		XMMATRIX WorldInverseTranspose = GameMath::InverseTranspose(W);
 
 		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
 		XMMATRIX T
 		(
-			+0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, -0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
 			+0.5f, +0.5f, 0.0f, 1.0f
 		);
 
-		for (UINT i = 0; i < obj->mSubsets.size(); ++i)
+		// per frame constant buffer
 		{
-			// per object constant buffer
+			PerFrameCB buffer;
+			buffer.mLights[0] = mLights[0];
+			buffer.mLights[1] = mLights[1];
+			buffer.mLights[2] = mLights[2];
+			buffer.mEyePositionW = mCamera.mPosition;
+			buffer.mFogStart = 15;
+			buffer.mFogRange = 175;
+			XMStoreFloat4(&buffer.mFogColor, Colors::Silver);
+			buffer.mHeightScale = 0.07f;
+			buffer.mMinTessDistance = 20;
+			buffer.mMaxTessDistance = 500;
+			buffer.mMinTessFactor = 0;
+			buffer.mMaxTessFactor = 6;
+			XMStoreFloat4x4(&buffer.mViewProj, ViewProj);
+
+			buffer.mTexelCellSpaceU = 1.0f / mTerrainObject.mInitInfo.HeightMapWidth;
+			buffer.mTexelCellSpaceV = 1.0f / mTerrainObject.mInitInfo.HeightMapDepth;
+			buffer.mWorldCellSpace = mTerrainObject.mInitInfo.CellSpacing;
+			
+			buffer.gTexelScale = XMFLOAT2(50, 50);
+
+			XMFLOAT4X4 M;
+			XMStoreFloat4x4(&M, ViewProj);
+			XMFLOAT4 WorldFrustumPlanes[6];
+			ExtractFrustumPlanes(WorldFrustumPlanes, M);			
+			CopyMemory(buffer.gWorldFrustumPlanes, WorldFrustumPlanes, sizeof(buffer.gWorldFrustumPlanes));
+
+			mContext->UpdateSubresource(mPerFrameCB, 0, 0, &buffer, 0, 0);
+
+			mContext->VSSetConstantBuffers(0, 1, &mPerFrameCB);
+			mContext->HSSetConstantBuffers(0, 1, &mPerFrameCB);
+			mContext->DSSetConstantBuffers(0, 1, &mPerFrameCB);
+			mContext->PSSetConstantBuffers(0, 1, &mPerFrameCB);
+		}
+
+		// per object constant buffer
+		{
+			PerObjectCB buffer;
+			XMStoreFloat4x4(&buffer.mWorld, W);
+			XMStoreFloat4x4(&buffer.mWorldInverseTranspose, GameMath::InverseTranspose(W));
+			XMStoreFloat4x4(&buffer.mWorldViewProj, WorldViewProj);
+			buffer.mMaterial = mTerrainObject.mMaterial;
+			XMStoreFloat4x4(&buffer.mTexCoordTransform, XMMatrixIdentity());
+			XMStoreFloat4x4(&buffer.mShadowTransform, W * S);
+			XMStoreFloat4x4(&buffer.mWorldViewProjTexture, WorldViewProj * T);
+
+			mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
+
+			mContext->VSSetConstantBuffers(1, 1, &mPerObjectCB);
+			mContext->DSSetConstantBuffers(1, 1, &mPerObjectCB);
+			mContext->PSSetConstantBuffers(1, 1, &mPerObjectCB);
+		}
+
+		// SRVs
+		{
+			mContext->VSSetShaderResources(0, 1, &mTerrainObject.mHeightMapSRV);
+			mContext->DSSetShaderResources(0, 1, &mTerrainObject.mHeightMapSRV);
+
+			ID3D11ShaderResourceView* const SRVs[4] =
 			{
-				PerObjectCB buffer;
-				XMStoreFloat4x4(&buffer.mWorld, W);
-				XMStoreFloat4x4(&buffer.mWorldInverseTranspose, WorldInverseTranspose);
-				XMStoreFloat4x4(&buffer.mWorldViewProj, WorldViewProj);
-				buffer.mMaterial = obj->mMaterials[i];
-				XMStoreFloat4x4(&buffer.mTexCoordTransform, obj->mTexCoordTransform);
-				XMStoreFloat4x4(&buffer.mShadowTransform, W * S);
-				XMStoreFloat4x4(&buffer.mWorldViewProjTexture, WorldViewProj * T);
+				mTerrainObject.mHeightMapSRV,
+				mTerrainObject.mLayerMapArraySRV,
+				mTerrainObject.mBlendMapSRV,
+				mShadowMap.GetSRV()
+			};
+			mContext->PSSetShaderResources(0, 4, SRVs);
+		}
 
-				mContext->UpdateSubresource(mPerObjectCB, 0, 0, &buffer, 0, 0);
+		// sampler states
+		{
+			mContext->VSSetSamplers(0, 1, &mTerrainObject.mHeightMapSS);
+			mContext->DSSetSamplers(0, 1, &mTerrainObject.mHeightMapSS);
+			mContext->PSSetSamplers(0, 1, &mTerrainObject.mHeightMapSS);
 
-				mContext->VSSetConstantBuffers(0, 1, &mPerObjectCB);
-				mContext->PSSetConstantBuffers(0, 1, &mPerObjectCB);
-			}
+			mContext->PSSetSamplers(1, 1, &mSamplerState);
+			mContext->PSSetSamplers(2, 1, &mShadowMap.GetSS());
+		}
 
-			// bind SRVs
-			{
-				mContext->PSSetShaderResources(0, 1, &obj->mDiffuseMapSRVs[i]);
-				mContext->PSSetShaderResources(1, 1, &obj->mNormalMapSRVs[i]);
-			}
+		// draw call
+		{
+			mContext->DrawIndexed(mTerrainObject.mPatchQuadFaces * 4, 0, 0);
+		}
 
-			// draw call
-			const Subset& subset = obj->mSubsets[i];
-			mContext->DrawIndexed(subset.FaceCount * 3, obj->mIndexStart + subset.FaceStart * 3, obj->mVertexStart);
+		// unbind SRVs
+		{
+			ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
+			mContext->VSSetShaderResources(0, 1, NullSRV);
+			mContext->DSSetShaderResources(0, 1, NullSRV);
 
+			ID3D11ShaderResourceView* const NullSRVs[4] = { nullptr, nullptr, nullptr, nullptr };
+			mContext->PSSetShaderResources(0, 4, NullSRVs);
+		}
 
-			// unbind SRVs
-			{
-				ID3D11ShaderResourceView* const NullSRVs[2] = { nullptr, nullptr };
-				mContext->PSSetShaderResources(0, 2, NullSRVs);
-			}
+		// unbind shaders
+		{
+			mContext->HSSetShader(nullptr, nullptr, 0);
+			mContext->DSSetShader(nullptr, nullptr, 0);
 		}
 	}
+
+	SetPerFrameCB();
+
+	// draw sky
+	DrawGameObject(&mSky);
 
 	if (IsKeyPressed(GLFW_KEY_2))
 	{
@@ -1546,11 +1155,8 @@ void TestApp::DrawScene()
 		//mSSAO.mDebugQuad.Draw(mContext, mSSAO.GetNormalDepthSRV());
 	}
 
-	// draw sky
-	DrawGameObject(&mSky);
-
 	// reset depth stencil state
-	mContext->OMSetDepthStencilState(nullptr, 0);
+	//mContext->OMSetDepthStencilState(nullptr, 0);
 
 	// unbind shadow map and ambient map as SRV
 	ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
