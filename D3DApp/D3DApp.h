@@ -817,4 +817,76 @@ public:
 	DebugQuad mDebugQuad;
 };
 
+class TerrainObject
+{
+public:
+	struct InitInfo
+	{
+		std::wstring HeightMapFileName;
+		std::vector<std::wstring> LayerMapFileName;
+		std::wstring BlendMapFileName;
+		float HeightScale;
+		UINT HeightMapWidth;
+		UINT HeightMapDepth;
+		float CellSpacing;
+	};
+
+	ID3D11VertexShader* mVertexShader;
+	ID3D11InputLayout* mInputLayout;
+	ID3D11HullShader* mHullShader;
+	ID3D11DomainShader* mDomainShader;
+	ID3D11PixelShader* mPixelShader;
+
+	ID3D11Buffer* mPatchQuadVB;
+	ID3D11Buffer* mPatchQuadIB;
+
+	struct VertexData
+	{
+		XMFLOAT3 position;
+		XMFLOAT2 TexCoord;
+		XMFLOAT2 BoundsY;
+	};
+
+	InitInfo mInitInfo;
+
+	XMMATRIX mWorld;
+	Material mMaterial;
+
+	ID3D11ShaderResourceView* mHeightMapSRV;
+	ID3D11ShaderResourceView* mLayerMapArraySRV;
+	ID3D11ShaderResourceView* mBlendMapSRV;
+
+	ID3D11SamplerState* mHeightMapSS;
+
+	UINT mPatchQuadVertices;
+	UINT mPatchQuadFaces;
+
+private:
+	void LoadHeightMap(TextureManager& manager);
+	void SmoothHeightMap();
+	bool IsInBounds(int i, int j);
+	float average(int i, int j);
+	void ComputePatchBoundsY(UINT i, UINT j);
+
+	// each patch has CellsPerPatch cells and CellsPerPatch+1 vertices
+	// 64 = max tessellation factor
+	static const int CellsPerPatch = 64;
+
+	UINT mPatchQuadRows;
+	UINT mPatchQuadCols;
+
+	std::vector<XMFLOAT2> mPatchBoundsY;
+	std::vector<float> mHeightMap;
+
+public:
+	TerrainObject();
+	~TerrainObject();
+
+	float GetWidth() const;
+	float GetDepth() const;
+	float GetHeight(float x, float z) const;
+
+	void init(ID3D11Device* device, ID3D11DeviceContext* context, TextureManager& manager, const InitInfo& info);
+};
+
 #endif // D3DAPP_H

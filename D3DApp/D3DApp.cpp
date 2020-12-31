@@ -3457,3 +3457,443 @@ void GameObjectInstance::update(float dt)
 		time = 0; // loop animation
 	}
 }
+
+TerrainObject::TerrainObject() :
+	mVertexShader(nullptr),
+	mInputLayout(nullptr),
+	mHullShader(nullptr),
+	mDomainShader(nullptr),
+	mPixelShader(nullptr),
+	mPatchQuadVB(nullptr),
+	mPatchQuadIB(nullptr),
+	mHeightMapSRV(nullptr),
+	mHeightMapSS(nullptr),
+	mLayerMapArraySRV(nullptr),
+	mBlendMapSRV(nullptr),
+	mPatchQuadVertices(0),
+	mPatchQuadFaces(0),
+	mPatchQuadRows(0),
+	mPatchQuadCols(0),
+	mWorld(XMMatrixIdentity())
+{
+	mMaterial.mAmbient  = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	mMaterial.mDiffuse  = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	mMaterial.mSpecular = XMFLOAT4(0.0f, 0.0f, 0.0f, 64.0f);
+	mMaterial.mReflect  = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+TerrainObject::~TerrainObject()
+{
+	SafeRelease(mVertexShader);
+	SafeRelease(mInputLayout);
+	SafeRelease(mHullShader);
+	SafeRelease(mDomainShader);
+	SafeRelease(mPixelShader);
+
+	SafeRelease(mPatchQuadVB);
+	SafeRelease(mPatchQuadIB);
+
+	SafeRelease(mHeightMapSRV);
+	SafeRelease(mHeightMapSS);
+}
+
+float TerrainObject::GetWidth() const
+{
+	// total terrain width
+	return (mInitInfo.HeightMapWidth - 1) * mInitInfo.CellSpacing;
+}
+
+float TerrainObject::GetDepth() const
+{
+	// total terrain depth
+	return (mInitInfo.HeightMapDepth - 1) * mInitInfo.CellSpacing;
+}
+
+float TerrainObject::GetHeight(float x, float z) const
+{
+	// transform from terrain local space to "cell" space
+	float w = (x + 0.5f * GetWidth()) / +mInitInfo.CellSpacing;
+	float d = (z - 0.5f * GetDepth()) / -mInitInfo.CellSpacing;
+
+	// get the row and column we are in
+	int row = std::floor(d);
+	int col = std::floor(w);
+
+	// grab the heights of the cell we are in
+	//  A--B
+	//  | /|
+	//  |/ |
+	//  C--D
+	float A = mHeightMap[(row + 0) * mInitInfo.HeightMapWidth + (col + 0)];
+	float B = mHeightMap[(row + 0) * mInitInfo.HeightMapWidth + (col + 1)];
+	float C = mHeightMap[(row + 1) * mInitInfo.HeightMapWidth + (col + 0)];
+	float D = mHeightMap[(row + 1) * mInitInfo.HeightMapWidth + (col + 1)];
+
+	// get the coordinates relative to the cell
+	float s = w - (float)col;
+	float t = d - (float)row;
+
+	if (s + t <= 1.0f) // upper triangle ABC
+	{
+		float uy = B - A;
+		float vy = C - A;
+		return A + s * uy + t * vy;
+	}
+	else // lower triangle DCB
+	{
+		float uy = C - D;
+		float vy = B - D;
+		return D + (1.0f - s) * uy + (1.0f - t) * vy;
+	}
+}
+
+void TerrainObject::init(ID3D11Device* device, ID3D11DeviceContext* context, TextureManager& manager, const InitInfo& info)
+{
+	mInitInfo = info;
+
+	// divide heightmap into patches such that each patch has CellsPerPatch cells
+	mPatchQuadRows = ((mInitInfo.HeightMapDepth - 1) / CellsPerPatch) + 1;
+	mPatchQuadCols = ((mInitInfo.HeightMapWidth - 1) / CellsPerPatch) + 1;
+
+	mPatchQuadVertices = mPatchQuadRows * mPatchQuadCols;
+	mPatchQuadFaces = (mPatchQuadRows - 1) * (mPatchQuadCols - 1);
+
+	LoadHeightMap(manager);
+	SmoothHeightMap();
+
+	// compute all patch bounds Y
+	{
+		mPatchBoundsY.resize(mPatchQuadFaces);
+
+		// for each patch
+		for (UINT i = 0; i < mPatchQuadRows - 1; ++i)
+		{
+			for (UINT j = 0; j < mPatchQuadCols - 1; ++j)
+			{
+				ComputePatchBoundsY(i, j);
+			}
+		}
+	}
+
+	// build quad patch vertex buffer
+	{
+		std::vector<VertexData> vertices(mPatchQuadRows * mPatchQuadCols);
+
+		float HalfWidth = 0.5f * GetWidth();
+		float HalfDepth = 0.5f * GetDepth();
+
+		float PatchWidth = GetWidth() / (mPatchQuadCols - 1);
+		float PatchDepth = GetDepth() / (mPatchQuadRows - 1);
+		float du = 1.0f / (mPatchQuadCols - 1);
+		float dv = 1.0f / (mPatchQuadRows - 1);
+
+		for (UINT i = 0; i < mPatchQuadRows; ++i)
+		{
+			float z = +HalfDepth - i * PatchDepth;
+
+			for (UINT j = 0; j < mPatchQuadCols; ++j)
+			{
+				float x = -HalfWidth + j * PatchWidth;
+
+				vertices[i * mPatchQuadCols + j].position = XMFLOAT3(x, 0, z);
+
+				// stretch texture over grid
+				vertices[i * mPatchQuadCols + j].TexCoord.x = j * du;
+				vertices[i * mPatchQuadCols + j].TexCoord.y = i * dv;
+			}
+		}
+
+		// store axis-aligned bounding box y-bounds in upper-left patch corner
+		for (UINT i = 0; i < mPatchQuadRows - 1; ++i)
+		{
+			for (UINT j = 0; j < mPatchQuadCols - 1; ++j)
+			{
+				UINT index = i * (mPatchQuadCols - 1) + j;
+				vertices[i * mPatchQuadCols + j].BoundsY = mPatchBoundsY[index];
+			}
+		}
+
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(VertexData) * vertices.size();
+		desc.Usage = D3D11_USAGE_IMMUTABLE;
+		desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		D3D11_SUBRESOURCE_DATA InitData;
+		InitData.pSysMem = vertices.data();
+		InitData.SysMemPitch = 0;
+		InitData.SysMemSlicePitch = 0;
+
+		HR(device->CreateBuffer(&desc, &InitData, &mPatchQuadVB));
+	}
+
+	// build quad patch index buffer
+	{
+		std::vector<UINT> indices(mPatchQuadFaces * 4); // 4 indices per quad face
+
+		// iterate over each quad and compute indices
+		UINT k = 0;
+
+		for (UINT i = 0; i < mPatchQuadRows - 1; ++i)
+		{
+			for (UINT j = 0; j < mPatchQuadCols - 1; ++j)
+			{
+				// rop row of 2x2 quad patch
+				indices[k + 0] = (i + 0) * mPatchQuadCols + j;
+				indices[k + 1] = (i + 0) * mPatchQuadCols + j + 1;
+
+				// bottom row of 2x2 quad patch
+				indices[k + 2] = (i + 1) * mPatchQuadCols + j;
+				indices[k + 3] = (i + 1) * mPatchQuadCols + j + 1;
+
+				k += 4; // next quad
+			}
+		}
+
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(UINT) * indices.size();
+		desc.Usage = D3D11_USAGE_IMMUTABLE;
+		desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		D3D11_SUBRESOURCE_DATA InitData;
+		InitData.pSysMem = indices.data();
+		InitData.SysMemPitch = 0;
+		InitData.SysMemSlicePitch = 0;
+
+		HR(device->CreateBuffer(&desc, &InitData, &mPatchQuadIB));
+	}
+
+	// build SRVs
+	{
+		// build height map SRV
+		{
+			D3D11_TEXTURE2D_DESC TextureDesc;
+			TextureDesc.Width = mInitInfo.HeightMapWidth;
+			TextureDesc.Height = mInitInfo.HeightMapDepth;
+			TextureDesc.MipLevels = 1;
+			TextureDesc.ArraySize = 1;
+			TextureDesc.Format = DXGI_FORMAT_R16_FLOAT;
+			TextureDesc.SampleDesc.Count = 1;
+			TextureDesc.SampleDesc.Quality = 0;
+			TextureDesc.Usage = D3D11_USAGE_DEFAULT;
+			TextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			TextureDesc.CPUAccessFlags = 0;
+			TextureDesc.MiscFlags = 0;
+
+			std::vector<DirectX::PackedVector::HALF> HeightMap(mHeightMap.size());
+
+			std::transform(mHeightMap.begin(),
+						   mHeightMap.end(),
+						   HeightMap.begin(),
+						   DirectX::PackedVector::XMConvertFloatToHalf);
+
+			D3D11_SUBRESOURCE_DATA InitData;
+			InitData.pSysMem = HeightMap.data();
+			InitData.SysMemPitch = mInitInfo.HeightMapWidth * sizeof(DirectX::PackedVector::HALF);
+			InitData.SysMemSlicePitch = 0;
+
+			ID3D11Texture2D* texture = nullptr;
+			HR(device->CreateTexture2D(&TextureDesc, &InitData, &texture));
+
+			D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc;
+			SRVDesc.Format = TextureDesc.Format;
+			SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+			SRVDesc.Texture2D.MostDetailedMip = 0;
+			SRVDesc.Texture2D.MipLevels = -1;
+
+			HR(device->CreateShaderResourceView(texture, &SRVDesc, &mHeightMapSRV));
+
+			SafeRelease(texture);
+		}
+		
+		// build layer and blend map SRVs
+		mLayerMapArraySRV = manager.CreateSRV(info.LayerMapFileName);
+		mBlendMapSRV = manager.CreateSRV(info.BlendMapFileName);
+	}
+
+	// shaders
+	{
+		// vertex shader
+		{
+			std::wstring path = L"TerrainVS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreateVertexShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mVertexShader));
+
+			// input layout
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT,    0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0}
+				};
+
+				HR(device->CreateInputLayout(desc.data(), desc.size(), pCode->GetBufferPointer(), pCode->GetBufferSize(), &mInputLayout));
+			}
+		}
+
+		// hull shader
+		{
+			std::wstring path = L"TerrainHS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "hs_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreateHullShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mHullShader));
+		}
+
+		// domain shader
+		{
+			std::wstring path = L"TerrainDS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "ds_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreateDomainShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mDomainShader));
+		}
+
+		// pixel shader
+		{
+			std::wstring path = L"TerrainPS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			defines.push_back({ "ENABLE_TEXTURE",         "0" });
+			defines.push_back({ "ENABLE_SPHERE_TEXCOORD", "0" });
+			defines.push_back({ "ENABLE_NORMAL_MAPPING",  "0" });
+			defines.push_back({ "ENABLE_ALPHA_CLIPPING",  "0" });
+			//defines.push_back({ "ENABLE_LIGHTING",       "1" });
+			defines.push_back({ "ENABLE_REFLECTION",      "0" });
+			defines.push_back({ "ENABLE_FOG",             "0" });
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			HR(device->CreatePixelShader(pCode->GetBufferPointer(), pCode->GetBufferSize(), nullptr, &mPixelShader));
+		}
+	}
+
+	// heightmap sampler state
+	{
+		D3D11_SAMPLER_DESC desc;
+		desc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+		desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+		desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+		desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+		desc.MipLODBias = 0;
+		desc.MaxAnisotropy = 1;
+		desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+		ZeroMemory(desc.BorderColor, sizeof(desc.BorderColor));
+		desc.MinLOD = 0;
+		desc.MaxLOD = 0;
+
+		HR(device->CreateSamplerState(&desc, &mHeightMapSS));
+	}
+}
+
+void TerrainObject::LoadHeightMap(TextureManager& manager)
+{
+	UINT HeightMapSize = mInitInfo.HeightMapWidth * mInitInfo.HeightMapDepth;
+	std::vector<unsigned char> HeightMap(HeightMapSize);
+
+	std::wstring path = manager.mTextureFolder + mInitInfo.HeightMapFileName;
+
+	std::ifstream ifs;
+	ifs.open(path.c_str(), std::ios_base::binary);
+
+	if (ifs)
+	{
+		ifs.read((char*)HeightMap.data(), (std::streamsize)HeightMap.size());
+		ifs.close();
+	}
+
+	// copy the raw data into a float array and scale it
+	mHeightMap.resize(HeightMapSize, 0);
+	for (UINT i = 0; i < HeightMapSize; ++i)
+	{
+		mHeightMap[i] = (HeightMap[i] / 255.0f) * mInitInfo.HeightScale;
+	}
+}
+
+void TerrainObject::SmoothHeightMap()
+{
+	std::vector<float> HeightMap(mHeightMap.size());
+
+	for (UINT i = 0; i < mInitInfo.HeightMapDepth; ++i)
+	{
+		for (UINT j = 0; j < mInitInfo.HeightMapWidth; ++j)
+		{
+			HeightMap[i * mInitInfo.HeightMapWidth + j] = average(i, j);
+		}
+	}
+
+	// replace the old heightmap with the filtered one
+	mHeightMap = HeightMap;
+}
+
+bool TerrainObject::IsInBounds(int i, int j)
+{
+	// true if ij are valid indices, false otherwise
+	return i >= 0 && i < (int)mInitInfo.HeightMapDepth && j >= 0 && j < (int)mInitInfo.HeightMapWidth;
+}
+float TerrainObject::average(int i, int j)
+{
+	// average height of the ij element -> average ij with its eight neighbor pixels
+	// if a pixel is missing neighbor, we don't include it in the average
+	//
+	// ----------
+	// | 1| 2| 3|
+	// ----------
+	// | 4|ij| 6|
+	// ----------
+	// | 7| 8| 9|
+	// ----------
+
+	float average = 0.0f;
+	float count = 0.0f;
+
+	// use int to allow negatives -> UINT overflow
+	for (int m = i - 1; m <= i + 1; ++m)
+	{
+		for (int n = j - 1; n <= j + 1; ++n)
+		{
+			if (IsInBounds(m, n))
+			{
+				average += mHeightMap[m * mInitInfo.HeightMapWidth + n];
+				++count;
+			}
+		}
+	}
+
+	return average / count;
+}
+
+void TerrainObject::ComputePatchBoundsY(UINT i, UINT j)
+{
+	// scan the heightmap values this patch covers and compute the min/max height
+
+	UINT x0 = j * CellsPerPatch;
+	UINT x1 = (j + 1) * CellsPerPatch;
+
+	UINT y0 = i * CellsPerPatch;
+	UINT y1 = (i + 1) * CellsPerPatch;
+
+	float MinY = +FLT_MAX;
+	float MaxY = -FLT_MAX;
+	for (UINT y = y0; y <= y1; ++y)
+	{
+		for (UINT x = x0; x <= x1; ++x)
+		{
+			UINT k = y * mInitInfo.HeightMapWidth + x;
+			MinY = std::min(MinY, mHeightMap[k]);
+			MaxY = std::max(MaxY, mHeightMap[k]);
+		}
+	}
+
+	UINT index = i * (mPatchQuadCols - 1) + j;
+	mPatchBoundsY[index] = XMFLOAT2(MinY, MaxY);
+}
