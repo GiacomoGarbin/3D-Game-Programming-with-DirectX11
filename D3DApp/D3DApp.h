@@ -124,6 +124,7 @@ class TextureManager
 	ID3D11Device* mDevice;
 	ID3D11DeviceContext* mContext;
 	std::map<std::wstring, ID3D11ShaderResourceView*> mSRVs;
+	std::vector<ID3D11ShaderResourceView*> mNamelessTextureSRVs;
 
 public:
 	TextureManager();
@@ -131,9 +132,12 @@ public:
 
 	std::wstring mTextureFolder;
 
-	void Init(ID3D11Device* device, ID3D11DeviceContext* context);
+	void init(ID3D11Device* device, ID3D11DeviceContext* context);
 	ID3D11ShaderResourceView* CreateSRV(const std::wstring& filename);
 	ID3D11ShaderResourceView* CreateSRV(const std::vector<std::wstring>& filenames);
+
+	UINT CreateRandomTexture1DSRV();
+	ID3D11ShaderResourceView* GetNamelessTextureSRV(UINT index);
 };
 
 class D3DApp

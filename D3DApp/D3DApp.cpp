@@ -170,7 +170,7 @@ bool D3DApp::Init()
 	if (!InitMainWindow()) return false;
 	if (!InitDirect3D()) return false;
 
-	mTextureManager.Init(mDevice, mContext);
+	mTextureManager.init(mDevice, mContext);
 
 	return true;
 }
@@ -2968,12 +2968,18 @@ TextureManager::~TextureManager()
 	{
 		SafeRelease(srv);
 	}
+	mSRVs.clear();
+
+	for (ID3D11ShaderResourceView* srv : mNamelessTextureSRVs)
+	{
+		SafeRelease(srv);
+	}
+	mNamelessTextureSRVs.clear();
 
 	mDevice = nullptr;
-	mSRVs.clear();
 }
 
-void TextureManager::Init(ID3D11Device* device, ID3D11DeviceContext* context)
+void TextureManager::init(ID3D11Device* device, ID3D11DeviceContext* context)
 {
 	mDevice = device;
 	mContext = context;
@@ -3125,6 +3131,57 @@ ID3D11ShaderResourceView* TextureManager::CreateSRV(const std::vector<std::wstri
 
 		return srv;
 	}
+}
+
+UINT TextureManager::CreateRandomTexture1DSRV()
+{
+	XMFLOAT4 RandomValues[1024];
+
+	for (int i = 0; i < 1024; ++i)
+	{
+		RandomValues[i].x = GameMath::RandNorm(-1.0f, +1.0f);
+		RandomValues[i].y = GameMath::RandNorm(-1.0f, +1.0f);
+		RandomValues[i].z = GameMath::RandNorm(-1.0f, +1.0f);
+		RandomValues[i].w = GameMath::RandNorm(-1.0f, +1.0f);
+	}
+
+	D3D11_SUBRESOURCE_DATA InitData;
+	InitData.pSysMem = RandomValues;
+	InitData.SysMemPitch = 1024 * sizeof(XMFLOAT4);
+	InitData.SysMemSlicePitch = 0;
+
+	D3D11_TEXTURE1D_DESC TextureDesc;
+	TextureDesc.Width = 1024;
+	TextureDesc.MipLevels = 1;
+	TextureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	TextureDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	TextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	TextureDesc.CPUAccessFlags = 0;
+	TextureDesc.MiscFlags = 0;
+	TextureDesc.ArraySize = 1;
+
+	ID3D11Texture1D* texture = nullptr;
+	HR(mDevice->CreateTexture1D(&TextureDesc, &InitData, &texture));
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC ViewDesc;
+	ViewDesc.Format = TextureDesc.Format;
+	ViewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1D;
+	ViewDesc.Texture1D.MipLevels = TextureDesc.MipLevels;
+	ViewDesc.Texture1D.MostDetailedMip = 0;
+
+	ID3D11ShaderResourceView* srv = nullptr;
+	HR(mDevice->CreateShaderResourceView(texture, &ViewDesc, &srv));
+
+	SafeRelease(texture);
+
+	mNamelessTextureSRVs.push_back(srv);
+
+	return mNamelessTextureSRVs.size() - 1;
+}
+
+ID3D11ShaderResourceView* TextureManager::GetNamelessTextureSRV(UINT index)
+{
+	return mNamelessTextureSRVs.at(index);
 }
 
 bool Model3DLoader::load(const std::string& filename,
