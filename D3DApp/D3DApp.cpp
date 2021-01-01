@@ -102,6 +102,12 @@ D3DApp::D3DApp() :
 	mRenderTargetView(nullptr),
 	mDepthStencilView(nullptr),
 
+	mWireframeRS(nullptr),
+	mNoCullRS(nullptr),
+	
+	mLessEqualDSS(nullptr),
+	mEqualDSS(nullptr),
+
 	mMainWindow(nullptr),
 	mMainWindowWidth(800),
 	mMainWindowHeight(600),
@@ -117,7 +123,6 @@ D3DApp::D3DApp() :
 	std::fill(mKeysState.begin(), mKeysState.end(), false);
 	
 	mCamera.mPosition = XMFLOAT3(0, 2, -15);
-	// mCamera.mPosition = XMVectorSet(0, 2, -15, 1);
 }
 
 D3DApp::~D3DApp()
