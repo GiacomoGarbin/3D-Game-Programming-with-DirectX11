@@ -893,4 +893,79 @@ public:
 	void init(ID3D11Device* device, ID3D11DeviceContext* context, TextureManager& manager, const InitInfo& info);
 };
 
+class ParticleSystem
+{
+	UINT mMaxParticles;
+	bool mFirstRun;
+
+	float mGameTime;
+	float mTimeStep;
+	float mAge;
+
+	XMFLOAT3 mEmitPosW;
+	XMFLOAT3 mEmitDirW;
+
+	ID3D11VertexShader* mVertexShader[2];
+	ID3D11InputLayout* mInputLayout[2];
+	ID3D11GeometryShader* mGeometryShader[2];
+	ID3D11PixelShader* mPixelShader;
+	
+	ID3D11Buffer* mConstantBuffer;
+
+	ID3D11DepthStencilState* mDisableDepthDSS;
+	ID3D11DepthStencilState* mNoDepthWritesDSS;
+
+	ID3D11BlendState* mAdditiveBlending;
+
+	struct ConstantBuffer
+	{
+		XMFLOAT4 EyePosW;
+
+		XMFLOAT4 EmitPosW;
+		XMFLOAT4 EmitDirW;
+
+		float GameTime;
+		float TimeStep;
+		XMFLOAT2 padding;
+
+		XMFLOAT4X4 ViewProj;
+	};;
+
+	static_assert((sizeof(ConstantBuffer) % 16) == 0, "constant buffer size must be 16-byte aligned");
+
+	ID3D11Buffer* mInitVB;
+	ID3D11Buffer* mStreamOutVB;
+	ID3D11Buffer* mDrawVB;
+
+	ID3D11ShaderResourceView* mTextureArraySRV;
+	ID3D11ShaderResourceView* mRandomTextureSRV;
+
+public:
+	ParticleSystem();
+	~ParticleSystem();
+
+	struct VertexData
+	{
+		XMFLOAT3 InitPosition;
+		XMFLOAT3 InitVelocity;
+		XMFLOAT2 size;
+		float age;
+		UINT type;
+	};
+
+	void init(ID3D11Device* device,
+			  TextureManager& manager,
+			  const std::wstring& EffectName,
+			  const std::vector<std::wstring>& TextureArrayName,
+			  UINT RandomTextureIndex,
+			  const XMFLOAT3& EmitPos,
+			  UINT MaxParticle);
+
+	void reset();
+	void update(float dt, float GameTime);
+	void draw(ID3D11DeviceContext* context, const CameraObject& camera);
+
+	XMFLOAT3& GetEmitPos() { return mEmitPosW; }
+};
+
 #endif // D3DAPP_H

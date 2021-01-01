@@ -3954,3 +3954,381 @@ void TerrainObject::ComputePatchBoundsY(UINT i, UINT j)
 	UINT index = i * (mPatchQuadCols - 1) + j;
 	mPatchBoundsY[index] = XMFLOAT2(MinY, MaxY);
 }
+
+ParticleSystem::ParticleSystem() :
+	mInitVB(nullptr),
+	mStreamOutVB(nullptr),
+	mDrawVB(nullptr),
+	mTextureArraySRV(nullptr),
+	mRandomTextureSRV(nullptr),
+	mVertexShader{ nullptr, nullptr },
+	mInputLayout{ nullptr, nullptr },
+	mGeometryShader{ nullptr, nullptr },
+	mPixelShader(nullptr),
+	mConstantBuffer(nullptr),
+	mDisableDepthDSS(nullptr),
+	mNoDepthWritesDSS(nullptr),
+	mAdditiveBlending(nullptr)
+{
+	mFirstRun = true;
+	mGameTime = 0.0f;
+	mTimeStep = 0.0f;
+	mAge = 0.0f;
+
+	mEmitPosW = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	mEmitDirW = XMFLOAT3(0.0f, 1.0f, 0.0f);
+}
+
+ParticleSystem::~ParticleSystem()
+{
+	SafeRelease(mInitVB);
+	SafeRelease(mStreamOutVB);
+	SafeRelease(mDrawVB);
+
+	for (UINT i = 0; i < 2; ++i)
+	{
+		SafeRelease(mVertexShader[i]);
+		SafeRelease(mInputLayout[i]);
+		SafeRelease(mGeometryShader[i]);
+	}
+	SafeRelease(mPixelShader);
+	
+	SafeRelease(mConstantBuffer);
+
+	SafeRelease(mDisableDepthDSS);
+	SafeRelease(mNoDepthWritesDSS);
+
+	SafeRelease(mAdditiveBlending);
+}
+
+void ParticleSystem::init(ID3D11Device* device,
+						  TextureManager& manager,
+						  const std::wstring& EffectName,
+						  const std::vector<std::wstring>& TextureArrayName,
+						  UINT RandomTextureIndex,
+						  const XMFLOAT3& EmitPos,
+						  UINT MaxParticles)
+{
+	mEmitPosW = EmitPos;
+	mMaxParticles = MaxParticles;
+
+	// shaders & input layout
+	{
+		// vertex shader
+		for (UINT i = 0; i < 2; ++i)
+		{
+			std::wstring path = EffectName + (i == 0 ? L"StreamOut" : L"Draw") + L"VS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "vs_5_0", 0, 0, &pCode, nullptr));
+			
+			HR(device->CreateVertexShader(pCode->GetBufferPointer(),
+										  pCode->GetBufferSize(),
+										  nullptr,
+										  &mVertexShader[i]));
+
+			// input layout
+			{
+				std::vector<D3D11_INPUT_ELEMENT_DESC> desc =
+				{
+					{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"VELOCITY", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"SIZE",     0, DXGI_FORMAT_R32G32_FLOAT,    0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"AGE",      0, DXGI_FORMAT_R32_FLOAT,       0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0},
+					{"TYPE",     0, DXGI_FORMAT_R32_UINT,        0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				};
+
+				HR(device->CreateInputLayout(desc.data(),
+											 desc.size(),
+											 pCode->GetBufferPointer(),
+											 pCode->GetBufferSize(),
+											 &mInputLayout[i]));
+			}
+		}
+
+		// geometry shader
+		for (UINT i = 0; i < 2; ++i)
+		{
+			std::wstring path = EffectName + (i == 0 ? L"StreamOut" : L"Draw") + L"GS.hlsl";
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), nullptr, nullptr, "main", "gs_5_0", 0, 0, &pCode, nullptr));
+
+			if (i == 0)
+			{
+				std::vector<D3D11_SO_DECLARATION_ENTRY> entries =
+				{
+					{0, "POSITION", 0, 0, 3, 0},
+					{0, "VELOCITY", 0, 0, 3, 0},
+					{0, "SIZE",     0, 0, 2, 0},
+					{0, "AGE",      0, 0, 1, 0},
+					{0, "TYPE",     0, 0, 1, 0},
+				};
+
+				UINT stride = sizeof(VertexData);
+
+				HR(device->CreateGeometryShaderWithStreamOutput(pCode->GetBufferPointer(),
+																pCode->GetBufferSize(),
+																entries.data(),
+																entries.size(),
+																&stride,
+																1,
+																0,															
+																nullptr,
+																&mGeometryShader[i]));
+			}
+			else
+			{
+				HR(device->CreateGeometryShader(pCode->GetBufferPointer(),
+												pCode->GetBufferSize(),
+												nullptr,
+												&mGeometryShader[i]));
+			}
+		}
+
+		// pixel shader
+		{
+			std::wstring path = EffectName + L"DrawPS.hlsl";
+
+			std::vector<D3D_SHADER_MACRO> defines;
+			defines.push_back({ nullptr, nullptr });
+
+			ID3DBlob* pCode;
+			HR(D3DCompileFromFile(path.c_str(), defines.data(), nullptr, "main", "ps_5_0", 0, 0, &pCode, nullptr));
+			
+			HR(device->CreatePixelShader(pCode->GetBufferPointer(),
+										 pCode->GetBufferSize(),
+										 nullptr,
+										 &mPixelShader));
+		}
+	}
+
+	mTextureArraySRV = manager.CreateSRV(TextureArrayName);
+	mRandomTextureSRV = manager.GetNamelessTextureSRV(RandomTextureIndex);
+
+	// build vertex buffers
+	{
+		// create the buffer to kick-off the particle system
+		D3D11_BUFFER_DESC desc;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.ByteWidth = 1 * sizeof(VertexData); // initial particle emitter
+		desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		// the initial particle emitter has type 0 and age 0
+		VertexData InitialParticle;
+		ZeroMemory(&InitialParticle, sizeof(VertexData));
+		InitialParticle.age = 0.0f;
+		InitialParticle.type = 0;
+
+		D3D11_SUBRESOURCE_DATA InitData;
+		InitData.pSysMem = &InitialParticle;
+
+		HR(device->CreateBuffer(&desc, &InitData, &mInitVB));
+
+		// create the ping-pong buffers for stream-out and drawing
+		desc.ByteWidth = sizeof(VertexData) * mMaxParticles;
+		desc.BindFlags = D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_STREAM_OUTPUT;
+
+		HR(device->CreateBuffer(&desc, 0, &mDrawVB));
+		HR(device->CreateBuffer(&desc, 0, &mStreamOutVB));
+	}
+
+	// constant buffer
+	{
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(ConstantBuffer);
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		HR(device->CreateBuffer(&desc, nullptr, &mConstantBuffer));
+	}
+
+	// depth stencil state : disable depth
+	{
+		D3D11_DEPTH_STENCIL_DESC desc;
+		//ZeroMemory(&desc, sizeof(D3D11_DEPTH_STENCIL_DESC));
+
+		desc.DepthEnable = false;
+		desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+		desc.DepthFunc = D3D11_COMPARISON_LESS;
+		desc.StencilEnable = false;
+		//desc.StencilReadMask = 0xff;
+		//desc.StencilWriteMask = 0xff;
+		//desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		//desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		//desc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		//desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+		HR(device->CreateDepthStencilState(&desc, &mDisableDepthDSS));
+	}
+
+	// depth stencil state : no depth writes
+	{
+		D3D11_DEPTH_STENCIL_DESC desc;
+		//ZeroMemory(&desc, sizeof(D3D11_DEPTH_STENCIL_DESC));
+
+		desc.DepthEnable = true;
+		desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+		desc.DepthFunc = D3D11_COMPARISON_LESS;
+		desc.StencilEnable = false;
+		//desc.StencilReadMask = 0xff;
+		//desc.StencilWriteMask = 0xff;
+		//desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		//desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		//desc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		//desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		//desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+		HR(device->CreateDepthStencilState(&desc, &mNoDepthWritesDSS));
+	}
+
+	// blend state : additive blending
+	{
+		D3D11_BLEND_DESC desc;
+		//ZeroMemory(&desc, sizeof(D3D11_BLEND_DESC));
+
+		desc.AlphaToCoverageEnable = false;
+		desc.IndependentBlendEnable = false;
+		desc.RenderTarget[0].BlendEnable = true;
+		desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+		desc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+		desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+		desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+		desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+		desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+		desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+		HR(device->CreateBlendState(&desc, &mAdditiveBlending));
+	}
+}
+
+void ParticleSystem::reset()
+{
+	mFirstRun = true;
+	mAge = 0.0f;
+}
+
+void ParticleSystem::update(float dt, float GameTime)
+{
+	mGameTime = GameTime;
+	mTimeStep = dt;
+
+	mAge += dt;
+}
+
+void ParticleSystem::draw(ID3D11DeviceContext* context, const CameraObject& camera)
+{
+	// constant buffer
+	{
+		ConstantBuffer buffer;
+		{
+			XMStoreFloat4(&buffer.EyePosW, XMLoadFloat3(&camera.mPosition));
+
+			XMStoreFloat4(&buffer.EmitPosW, XMLoadFloat3(&mEmitPosW));
+			XMStoreFloat4(&buffer.EmitDirW, XMLoadFloat3(&mEmitDirW));
+
+			buffer.GameTime = mGameTime;
+			buffer.TimeStep = mTimeStep;
+
+			XMMATRIX ViewProj = XMLoadFloat4x4(&camera.mView) * camera.mProj;
+			XMStoreFloat4x4(&buffer.ViewProj, ViewProj);
+		}
+		context->UpdateSubresource(mConstantBuffer, 0, 0, &buffer, 0, 0);
+
+		//context->VSSetConstantBuffers(0, 1, &mConstantBuffer);
+		context->GSSetConstantBuffers(0, 1, &mConstantBuffer);
+		context->PSSetConstantBuffers(0, 1, &mConstantBuffer);
+	}
+
+	// bind SRVs
+	{
+		context->GSSetShaderResources(0, 1, &mRandomTextureSRV);
+		context->PSSetShaderResources(0, 1, &mTextureArraySRV);
+	}
+
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+
+	UINT stride = sizeof(VertexData);
+	UINT offset = 0;
+
+	// on the first pass, use the initialization VB
+	context->IASetVertexBuffers(0, 1, mFirstRun ? &mInitVB : &mDrawVB, &stride, &offset);
+
+	// update the particle list using the stream-out VB
+	context->SOSetTargets(1, &mStreamOutVB, &offset);
+
+	// stream-out shaders and input layout
+	{
+		context->VSSetShader(mVertexShader[0], nullptr, 0);
+		context->GSSetShader(mGeometryShader[0], nullptr, 0);
+		// disable pixel shader for stream-out only
+		context->PSSetShader(nullptr, nullptr, 0);
+
+		context->IASetInputLayout(mInputLayout[0]);
+	}
+
+	// we must also disable the depth buffer for stream-out only
+	context->OMSetDepthStencilState(mDisableDepthDSS, 0);
+
+	if (mFirstRun)
+	{
+		context->Draw(1, 0);
+		mFirstRun = false;
+	}
+	else
+	{
+		context->DrawAuto();
+	}
+
+	// done streaming-out, unbind the vertex buffer
+	ID3D11Buffer* buffers[1] = { nullptr };
+	context->SOSetTargets(1, buffers, &offset);
+
+	// ping-pong the vertex buffers
+	std::swap(mDrawVB, mStreamOutVB);
+
+	// draw the updated streamed-out particle system
+	context->IASetVertexBuffers(0, 1, &mDrawVB, &stride, &offset);
+
+	// draw shaders and input layout
+	{
+		context->VSSetShader(mVertexShader[1], nullptr, 0);
+		context->GSSetShader(mGeometryShader[1], nullptr, 0);
+		context->PSSetShader(mPixelShader, nullptr, 0);
+
+		context->IASetInputLayout(mInputLayout[1]);
+	}
+
+	FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+	context->OMSetBlendState(mAdditiveBlending, BlendFactor, 0xFFFFFFFF);
+	context->OMSetDepthStencilState(mNoDepthWritesDSS, 0);
+
+	context->DrawAuto();
+
+	// unbind SRVs
+	{
+		ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
+		context->GSSetShaderResources(0, 1, NullSRV);
+		context->PSSetShaderResources(0, 1, NullSRV);
+	}
+
+	// unbind shaders
+	{
+		context->VSSetShader(nullptr, nullptr, 0);
+		context->GSSetShader(nullptr, nullptr, 0);
+		context->PSSetShader(nullptr, nullptr, 0);
+	}
+}
