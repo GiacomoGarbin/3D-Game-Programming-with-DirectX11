@@ -55,7 +55,7 @@ public:
 		XMFLOAT4X4 mWorld;
 		XMFLOAT4X4 mWorldInverseTranspose;
 		XMFLOAT4X4 mWorldViewProj;
-		Material mMaterial;
+		Material   mMaterial;
 		XMFLOAT4X4 mTexCoordTransform;
 		XMFLOAT4X4 mShadowTransform;
 		XMFLOAT4X4 mWorldViewProjTexture;
@@ -79,10 +79,13 @@ public:
 	void DrawSceneToShadowMap();
 	void DrawSceneToSSAONormalDepthMap();
 
-	GameObject mSky;
-
 	TerrainObject mTerrainObject;
 	bool mWalkCameraMode;
+
+	GameObject mSky;
+
+	ParticleSystem mFire;
+	ParticleSystem mRain;
 
 	void ExtractFrustumPlanes(XMFLOAT4 planes[6], XMFLOAT4X4 M);
 };
@@ -320,6 +323,39 @@ bool TestApp::Init()
 		mTerrainObject.init(mDevice, mContext, mTextureManager, info);
 	}
 
+	// particle systems
+	{
+		UINT RandomTextureIndex = mTextureManager.CreateRandomTexture1DSRV();
+
+		// fire
+		{
+			std::vector<std::wstring> textures;
+			textures.push_back(L"flare0.dds");
+
+			mFire.init(mDevice,
+					   mTextureManager,
+					   L"Fire",
+					   textures,
+					   RandomTextureIndex,
+					   XMFLOAT3(0, 1, 120),
+					   500);
+		}
+
+		// rain
+		{
+			std::vector<std::wstring> textures;
+			textures.push_back(L"raindrop.dds");
+
+			mRain.init(mDevice,
+					   mTextureManager,
+					   L"Rain",
+					   textures,
+					   RandomTextureIndex,
+					   XMFLOAT3(0, 0, 0),
+					   10000);
+		}
+	}
+
 	// scene bounds
 	{
 		mSceneBounds.Center = XMFLOAT3(0, 0, 0);
@@ -412,6 +448,17 @@ void TestApp::UpdateScene(float dt)
 		CameraPosition = XMFLOAT3(CameraPosition.x, y + 2.0f, CameraPosition.z);
 	}
 
+	if (IsKeyPressed(GLFW_KEY_R))
+	{
+		// reset particle systems
+		mFire.reset();
+		mRain.reset();
+	}
+
+	// update particle systems
+	mFire.update(dt, mTimer.TotalTime());
+	mRain.update(dt, mTimer.TotalTime());
+
 	mCamera.UpdateView();
 }
 
@@ -463,9 +510,9 @@ void TestApp::DrawSceneToShadowMap()
 		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
 		XMMATRIX T
 		(
-			+0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, -0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
 			+0.5f, +0.5f, 0.0f, 1.0f
 		);
 
@@ -862,9 +909,9 @@ void TestApp::DrawScene()
 		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
 		XMMATRIX T
 		(
-			+0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, -0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
 			+0.5f, +0.5f, 0.0f, 1.0f
 		);
 
@@ -1031,9 +1078,9 @@ void TestApp::DrawScene()
 		// transform NDC space [-1,+1]^2 to texture space [0,1]^2
 		XMMATRIX T
 		(
-			+0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, -0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
+			+0.5f,  0.0f, 0.0f, 0.0f,
+			 0.0f, -0.5f, 0.0f, 0.0f,
+			 0.0f,  0.0f, 1.0f, 0.0f,
 			+0.5f, +0.5f, 0.0f, 1.0f
 		);
 
@@ -1143,6 +1190,17 @@ void TestApp::DrawScene()
 
 	// draw sky
 	DrawGameObject(&mSky);
+
+	// draw particle systems
+	{
+		mContext->GSSetSamplers(0, 1, &mSamplerState);
+		mContext->PSSetSamplers(0, 1, &mSamplerState);
+
+		mFire.draw(mContext, mCamera);
+
+		mRain.GetEmitPos() = mCamera.mPosition;
+		mRain.draw(mContext, mCamera);
+	}
 
 	if (IsKeyPressed(GLFW_KEY_2))
 	{
