@@ -412,7 +412,7 @@ public:
 	Microsoft::WRL::ComPtr<ID3D11HullShader> mHullShader;
 	Microsoft::WRL::ComPtr<ID3D11DomainShader> mDomainShader;
 	Microsoft::WRL::ComPtr<ID3D11GeometryShader> mGeometryShader;
-	Microsoft::WRL::ComPtr<ID3D11PixelShader>  mPixelShader;
+	Microsoft::WRL::ComPtr<ID3D11PixelShader> mPixelShader;
 	Microsoft::WRL::ComPtr<ID3D11InputLayout> mInputLayout;
 	D3D11_PRIMITIVE_TOPOLOGY mPrimitiveTopology;
 
@@ -651,23 +651,25 @@ public:
 class DebugQuad : public GameObject
 {
 public:
-	enum ScreenCorner
+	enum WindowCorner
 	{
 		TopLeft,
 		TopRight,
 		BottomLeft,
-		BottomRight
+		BottomRight,
+		FullWindow
 	};
 
 	DebugQuad();
 	~DebugQuad();
 
-	void Init(ID3D11Device* device, float WindowAspectRatio, ScreenCorner position, float TextureAspectRatio);
+	void Init(ID3D11Device* device, float WindowAspectRatio, WindowCorner position, float TextureAspectRatio);
 	void OnResize(float AspectRatio);
 	void Draw(ID3D11DeviceContext* context, ID3D11ShaderResourceView* srv);
+	void Draw(ID3D11DeviceContext* context, std::vector<ID3D11ShaderResourceView*> SRVs);
 
 private:
-	ScreenCorner mPosition;
+	WindowCorner mPosition;
 	float mAspectRatio;
 
 	ID3D11Buffer* mDebugQuadCB;

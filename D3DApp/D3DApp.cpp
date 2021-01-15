@@ -995,8 +995,8 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 
 	std::ifstream ifs;
 
-	//ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
-	ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
+	ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
+	//ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
 
 	std::string line;
 
@@ -1717,7 +1717,7 @@ DebugQuad::~DebugQuad()
 	SafeRelease(mDebugQuadCB);
 }
 
-void DebugQuad::Init(ID3D11Device* device, float WindowAspectRatio, ScreenCorner position, float TextureAspectRatio)
+void DebugQuad::Init(ID3D11Device* device, float WindowAspectRatio, WindowCorner position, float TextureAspectRatio)
 {
 	GeometryGenerator::CreateScreenQuad(mMesh);
 
@@ -1781,6 +1781,7 @@ void DebugQuad::Init(ID3D11Device* device, float WindowAspectRatio, ScreenCorner
 		std::wstring path = L"DebugQuadPS.hlsl";
 
 		std::vector<D3D_SHADER_MACRO> defines;
+		defines.push_back({ "ENABLE_SSR", "0" });
 		defines.push_back({ nullptr, nullptr });
 
 		ID3DBlob* pCode;
@@ -1830,6 +1831,9 @@ void DebugQuad::OnResize(float WindowAspectRatio)
 		case BottomRight:
 			T = XMMatrixTranslation(+1 - w, -0.5f, 0.0f);
 			break;
+		case FullWindow:
+			S = T = XMMatrixIdentity();
+			break;
 	}
 
 	mWorld = S * T;
@@ -1876,6 +1880,49 @@ void DebugQuad::Draw(ID3D11DeviceContext* context, ID3D11ShaderResourceView* srv
 	// unbind SRV
 	ID3D11ShaderResourceView* const NullSRV[1] = { nullptr };
 	context->PSSetShaderResources(0, 1, NullSRV);
+}
+
+void DebugQuad::Draw(ID3D11DeviceContext* context, std::vector<ID3D11ShaderResourceView*> SRVs)
+{
+	// shaders
+	context->VSSetShader(mVertexShader.Get(), nullptr, 0);
+	context->PSSetShader(mPixelShader.Get(), nullptr, 0);
+
+	// input layout
+	context->IASetInputLayout(mInputLayout.Get());
+
+	// primitive topology
+	context->IASetPrimitiveTopology(mPrimitiveTopology);
+
+	// vertex and index buffers
+	UINT stride = sizeof(GeometryGenerator::Vertex);
+	UINT offset = 0;
+	context->IASetVertexBuffers(0, 1, mVertexBuffer.GetAddressOf(), &stride, &offset);
+	context->IASetIndexBuffer(mIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+	// constant buffer per object
+	{
+		DebugQuadCB buffer;
+		XMStoreFloat4x4(&buffer.mWorldViewProj, mWorld);
+		context->UpdateSubresource(mDebugQuadCB, 0, nullptr, &buffer, 0, 0);
+		context->VSSetConstantBuffers(0, 1, &mDebugQuadCB);
+	}
+
+	// rasterizer, blend and depth-stencil states
+	context->RSSetState(mRasterizerState.Get());
+	FLOAT BlendFactor[] = { 0, 0, 0, 0 };
+	context->OMSetBlendState(mBlendState.Get(), BlendFactor, 0xFFFFFFFF);
+	context->OMSetDepthStencilState(mDepthStencilState.Get(), mStencilRef);
+
+	// bind SRVs
+	context->PSSetShaderResources(0, SRVs.size(), SRVs.data());
+
+	// draw call
+	context->DrawIndexed(mMesh.mIndices.size(), mIndexStart, mVertexStart);
+
+	// unbind SRVs
+	std::fill(SRVs.begin(), SRVs.end(), nullptr);
+	context->PSSetShaderResources(0, SRVs.size(), SRVs.data());
 }
 
 ShadowMap::ShadowMap() :
@@ -2406,7 +2453,7 @@ void SSAO::Init(ID3D11Device* device, UINT width, UINT height, float FieldOfView
 			HR(device->CreateBuffer(&desc, &InitData, &mAmbientMapQuad.mVertexBuffer));
 		}
 
-		// input buffer
+		// index buffer
 		{
 			D3D11_BUFFER_DESC desc;
 			desc.ByteWidth = sizeof(UINT) * mAmbientMapQuad.mMesh.mIndices.size();
@@ -2753,7 +2800,7 @@ void SSAO::ComputeAmbientMap(ID3D11DeviceContext* context, const CameraObject& c
 			context->Draw(mAmbientMapQuad.mMesh.mVertices.size(), mAmbientMapQuad.mVertexStart);
 		}
 
-		//// unbind SRVs
+		// unbind SRVs
 		ID3D11ShaderResourceView* const NullSRV[2] = { nullptr, nullptr };
 		context->PSSetShaderResources(0, 2, NullSRV);
 	}
@@ -2963,8 +3010,8 @@ TextureManager::TextureManager() :
 	mDevice(nullptr),
 	mContext(nullptr)
 {
-	//mTextureFolder = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
-	mTextureFolder = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+	mTextureFolder = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+	//mTextureFolder = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
 }
 
 TextureManager::~TextureManager()
@@ -3196,7 +3243,8 @@ bool Model3DLoader::load(const std::string& filename,
 						 std::vector<Model3DMaterial>& materials,
 						 SkinnedObject* SkinnedData)
 {
-	std::string base = "C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/";
+	//std::string base = "C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/";
+	std::string base = "C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/";
 	std::ifstream ifs(base + filename);
 
 	UINT nMaterials = 0;
