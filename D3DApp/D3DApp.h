@@ -663,21 +663,28 @@ public:
 	DebugQuad();
 	~DebugQuad();
 
-	void Init(ID3D11Device* device, float WindowAspectRatio, WindowCorner position, float TextureAspectRatio);
-	void OnResize(float AspectRatio);
+	void Init(ID3D11Device* device, UINT WindowWidth, UINT WindowHeight, float WindowAspectRatio, WindowCorner position, float TextureAspectRatio);
+	void OnResize(UINT WindowWidth, UINT WindowHeight, float WindowAspectRatio);
 	void Draw(ID3D11DeviceContext* context, ID3D11ShaderResourceView* srv);
 	void Draw(ID3D11DeviceContext* context, std::vector<ID3D11ShaderResourceView*> SRVs);
 
 private:
 	WindowCorner mPosition;
-	float mAspectRatio;
+	float mQuadAspectRatio;
+
+	UINT mWindowWidth;
+	UINT mWindowHeight;
 
 	ID3D11Buffer* mDebugQuadCB;
 
 	struct DebugQuadCB
 	{
-		XMFLOAT4X4 mWorldViewProj;
+		XMFLOAT4X4 WorldViewProj;
+		XMFLOAT2 DebugQuadSize;
+		XMFLOAT2 padding;
 	};
+
+	static_assert((sizeof(DebugQuadCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
 };
 
 class ShadowMap

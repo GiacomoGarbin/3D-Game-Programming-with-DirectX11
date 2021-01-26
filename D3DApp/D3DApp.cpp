@@ -1717,7 +1717,7 @@ DebugQuad::~DebugQuad()
 	SafeRelease(mDebugQuadCB);
 }
 
-void DebugQuad::Init(ID3D11Device* device, float WindowAspectRatio, WindowCorner position, float TextureAspectRatio)
+void DebugQuad::Init(ID3D11Device* device, UINT WindowWidth, UINT WindowHeight, float WindowAspectRatio, WindowCorner position, float TextureAspectRatio)
 {
 	GeometryGenerator::CreateScreenQuad(mMesh);
 
@@ -1791,8 +1791,6 @@ void DebugQuad::Init(ID3D11Device* device, float WindowAspectRatio, WindowCorner
 
 	// constant buffer
 	{
-		static_assert((sizeof(DebugQuadCB) % 16) == 0, "constant buffer size must be 16-byte aligned");
-
 		D3D11_BUFFER_DESC desc;
 		desc.ByteWidth = sizeof(DebugQuadCB);
 		desc.Usage = D3D11_USAGE_DEFAULT;
@@ -1805,14 +1803,17 @@ void DebugQuad::Init(ID3D11Device* device, float WindowAspectRatio, WindowCorner
 	}
 
 	mPosition = position;
-	mAspectRatio = TextureAspectRatio;
+	mQuadAspectRatio = TextureAspectRatio;
 
-	OnResize(WindowAspectRatio);
+	OnResize(WindowWidth, WindowHeight, WindowAspectRatio);
 }
 
-void DebugQuad::OnResize(float WindowAspectRatio)
+void DebugQuad::OnResize(UINT WindowWidth, UINT WindowHeight, float WindowAspectRatio)
 {
-	float w = (0.5f / WindowAspectRatio) * mAspectRatio;
+	mWindowWidth = WindowWidth;
+	mWindowHeight = WindowHeight;
+
+	float w = (0.5f / WindowAspectRatio) * mQuadAspectRatio;
 
 	XMMATRIX S = XMMatrixScaling(w, 0.5f, 1.0f);
 	XMMATRIX T;
@@ -1860,9 +1861,18 @@ void DebugQuad::Draw(ID3D11DeviceContext* context, ID3D11ShaderResourceView* srv
 	// constant buffer per object
 	{
 		DebugQuadCB buffer;
-		XMStoreFloat4x4(&buffer.mWorldViewProj, mWorld);
+		XMStoreFloat4x4(&buffer.WorldViewProj, mWorld);
+
+		XMFLOAT4X4 world;
+		XMStoreFloat4x4(&world, mWorld);
+		UINT DebugQuadWidth  = world._11 * mWindowWidth;
+		UINT DebugQuadHeight = world._22 * mWindowHeight;
+		buffer.DebugQuadSize = XMFLOAT2(DebugQuadWidth, DebugQuadHeight);
+
 		context->UpdateSubresource(mDebugQuadCB, 0, nullptr, &buffer, 0, 0);
+
 		context->VSSetConstantBuffers(0, 1, &mDebugQuadCB);
+		context->PSSetConstantBuffers(0, 1, &mDebugQuadCB);
 	}
 
 	// rasterizer, blend and depth-stencil states
@@ -1903,7 +1913,7 @@ void DebugQuad::Draw(ID3D11DeviceContext* context, std::vector<ID3D11ShaderResou
 	// constant buffer per object
 	{
 		DebugQuadCB buffer;
-		XMStoreFloat4x4(&buffer.mWorldViewProj, mWorld);
+		XMStoreFloat4x4(&buffer.WorldViewProj, mWorld);
 		context->UpdateSubresource(mDebugQuadCB, 0, nullptr, &buffer, 0, 0);
 		context->VSSetConstantBuffers(0, 1, &mDebugQuadCB);
 	}
