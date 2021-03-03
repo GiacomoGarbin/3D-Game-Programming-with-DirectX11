@@ -160,6 +160,8 @@ int D3DApp::Run()
 			CalculateFrameStats();
 			UpdateScene(mTimer.DeltaTime());
 			DrawScene();
+
+			mFrameIndex++;
 		}
 		else
 		{
@@ -176,6 +178,8 @@ bool D3DApp::Init()
 	if (!InitDirect3D()) return false;
 
 	mTextureManager.init(mDevice, mContext);
+
+	mFrameIndex = 0;
 
 	return true;
 }

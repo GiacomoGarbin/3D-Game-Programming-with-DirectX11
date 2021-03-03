@@ -170,6 +170,8 @@ protected:
 	GameTimer mTimer;
 	bool mAppPaused;
 
+	UINT mFrameIndex;
+
 	// D3D11 stuff
 	ID3D11Device* mDevice;
 	ID3D11DeviceContext* mContext;
