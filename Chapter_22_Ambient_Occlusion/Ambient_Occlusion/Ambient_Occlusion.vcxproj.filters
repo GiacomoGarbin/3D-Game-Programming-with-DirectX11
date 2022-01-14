@@ -18,11 +18,22 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\D3DApp\D3DApp.cpp">
+    <ClCompile Include="..\..\D3DApp\D3DApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\D3DApp\D3DApp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="DebugQuadPS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="DebugQuadVS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
     <FxCompile Include="DS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
@@ -30,6 +41,9 @@
       <Filter>Source Files</Filter>
     </FxCompile>
     <FxCompile Include="PS.hlsl">
+      <Filter>Source Files</Filter>
+    </FxCompile>
+    <FxCompile Include="ShadowMapVS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
     <FxCompile Include="SkyPS.hlsl">
@@ -41,19 +55,5 @@
     <FxCompile Include="VS.hlsl">
       <Filter>Source Files</Filter>
     </FxCompile>
-    <FxCompile Include="ShadowMapVS.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="DebugQuadPS.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-    <FxCompile Include="DebugQuadVS.hlsl">
-      <Filter>Source Files</Filter>
-    </FxCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\D3DApp\D3DApp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>

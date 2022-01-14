@@ -999,8 +999,8 @@ void GeometryGenerator::CreateModel(std::string name, Mesh& mesh)
 
 	std::ifstream ifs;
 
-	ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
-	//ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
+	//ifs.open("C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/" + name);
+	ifs.open("C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/" + name);
 
 	std::string line;
 
@@ -3024,8 +3024,8 @@ TextureManager::TextureManager() :
 	mDevice(nullptr),
 	mContext(nullptr)
 {
-	mTextureFolder = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
-	//mTextureFolder = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
+	//mTextureFolder = L"C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/textures/";
+	mTextureFolder = L"C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/textures/";
 }
 
 TextureManager::~TextureManager()
@@ -3257,8 +3257,8 @@ bool Model3DLoader::load(const std::string& filename,
 						 std::vector<Model3DMaterial>& materials,
 						 SkinnedObject* SkinnedData)
 {
-	//std::string base = "C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/";
-	std::string base = "C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/";
+	std::string base = "C:/Users/D3PO/source/repos/3D Game Programming with DirectX 11/models/";
+	//std::string base = "C:/Users/ggarbin/Desktop/3D-Game-Programming-with-DirectX11/models/";
 	std::ifstream ifs(base + filename);
 
 	UINT nMaterials = 0;

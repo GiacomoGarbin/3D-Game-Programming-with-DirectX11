@@ -799,6 +799,7 @@ public:
 	{
 		XMFLOAT4X4 WorldView;
 		XMFLOAT4X4 WorldViewProj;
+		XMFLOAT4X4 WorldInverseTranspose;
 		XMFLOAT4X4 WorldInverseTransposeView;
 		XMFLOAT4X4 TexCoordTransform;
 	};
